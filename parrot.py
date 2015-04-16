@@ -35,7 +35,7 @@ from statistics import mean, median, stdev
 
 from volapi import Room
 
-ADMINFAG = "RealDolos"
+ADMINFAG = ["RealDolos"]
 PARROTFAG = "Parrot"
 
 
@@ -53,10 +53,10 @@ class Command:
     shitposting = False
     greens = False
 
-    def __init__(self, room, admin, *args, **kw):
+    def __init__(self, room, admins, *args, **kw):
         args, kw = kw, args
         self.room = room
-        self.admin = admin
+        self.admins = admins
         handlers = getattr(self, "handlers", list())
         if isinstance(handlers, str):
             handlers = handlers,
@@ -77,7 +77,7 @@ class Command:
         return "{}\u2060{}".format(nick[0], nick[1:])
 
     def isadmin(self, msg):
-        return msg.logged_in and msg.nick == self.admin
+        return msg.logged_in and msg.nick in self.admins
 
     def allowed(self, msg):
         return not self.greens or msg.logged_in
@@ -147,7 +147,7 @@ class DefineCommand(PhraseCommand, Command):
         if existing and existing.locked and not admin:
             logging.warning("Rejecting logged define for %s", phrase)
             self.post("{}: {} says sodomize yerself!",
-                      msg.nick, self.nonotify(self.admin))
+                      msg.nick, self.nonotify(self.admins[0]))
             return True
 
         self.set_phrase(phrase, remainder, admin, msg.nick)
@@ -352,7 +352,7 @@ class XResponderCommand(PhraseCommand, Command):
                 and "download" in lmsg):
             self.post("{}: STFU, nobody in here can do anything about it!",
                       nick)
-        if "ALKON" == nick:
+        if "ALKON" == nick or "ALK0N" == nick:
             self.post("STFU newfag m(")
 
 
@@ -399,9 +399,9 @@ def main():
     parser.add_argument("--parrot", "-p",
                         type=str, default=PARROTFAG,
                         help="Parrot user name")
-    parser.add_argument("--admin", "-a",
+    parser.add_argument("--admins", "-a", nargs="*",
                         type=str, default=ADMINFAG,
-                        help="Admin user name")
+                        help="Admin user name(s)")
     parser.add_argument("--ded", "-d", action="store_true",
                         help="Initially !ded")
     parser.add_argument("--shitposting", action="store_true",
@@ -435,7 +435,7 @@ def main():
                     except Exception:
                         logging.error("Failed to login", exc_info=True)
                         return 1
-                handler = ChatHandler(room, args.admin, args.noparrot)
+                handler = ChatHandler(room, args.admins, args.noparrot)
                 room.listen(onmessage=handler)
         except Exception:
             logging.error("Died, respawning", exc_info=True)
