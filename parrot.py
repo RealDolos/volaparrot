@@ -28,6 +28,7 @@ import logging
 import inspect
 import sqlite3
 import os
+import random
 import sys
 
 from collections import namedtuple, defaultdict
@@ -451,6 +452,42 @@ class RoomStatsCommand(Command):
             trunc += count,
         self.post("{}\n{}",
                   total, ", ".join(trunc))
+        return True
+
+
+class EightballCommand(Command):
+    handlers = "!8ball", "!eightball", "!blueballs"
+
+    phrases =  [
+        "It is certain",
+        "It is decidedly so",
+        "Without a doubt",
+        "Yes definitely",
+        "You may rely on it",
+        "As I see it, yes",
+        "Most likely",
+        "Outlook good",
+        "Yes",
+        "Signs point to yes",
+        "Reply hazy try again",
+        "Ask again later",
+        "Better not tell you now",
+        "Cannot predict now",
+        "Concentrate and ask again",
+        "Don't count on it",
+        "My reply is no",
+        "My sources say no",
+        "Outlook not so good",
+        "Very doubtful"
+        ]
+
+    def __call__(self, cmd, remainder, msg):
+        if not self.allowed(msg):
+            return True
+        if not remainder.strip():
+            self.post("{}: You're a faggot!", msg.nick)
+            return True
+        self.post("{}: {}", msg.nick, random.choice(self.phrases))
         return True
 
 
