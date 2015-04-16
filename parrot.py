@@ -127,10 +127,10 @@ class PhraseCommand(DBCommand):
         if not phrase:
             return None
         cur = self.conn.cursor()
-        ph = cur.execute("SELECT phrase, text, locked FROM phrases "
-                         "WHERE phrase = ?",
-                         (phrase,)).fetchone()
-        return self.to_phrase(ph) if ph else ph
+        phrase = cur.execute("SELECT phrase, text, locked FROM phrases "
+                             "WHERE phrase = ?",
+                             (phrase,)).fetchone()
+        return self.to_phrase(phrase) if phrase else phrase
 
     def set_phrase(self, phrase, text, locked, owner):
         cur = self.conn.cursor()
@@ -151,7 +151,8 @@ class DiscoverCommand(DBCommand, Command):
         self._thread = Thread(target=self._refresh, daemon=True)
         self._thread.start()
 
-    def _stat(self, room):
+    @staticmethod
+    def _stat(room):
         with Room(room) as remote:
             remote.listen(onusercount=lambda x: False)
             return max(remote.user_count - 1, 0), len(remote.files)
@@ -458,7 +459,7 @@ class RoomStatsCommand(Command):
 class EightballCommand(Command):
     handlers = "!8ball", "!eightball", "!blueballs"
 
-    phrases =  [
+    phrases = [
         "It is certain",
         "It is decidedly so",
         "Without a doubt",
