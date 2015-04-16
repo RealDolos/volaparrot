@@ -21,7 +21,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods,bad-continuation
+# pylint: disable=missing-docstring,broad-except,too-few-public-methods
+# pylint: disable=bad-continuation,star-args
 
 import logging
 import inspect
@@ -37,6 +38,11 @@ from volapi import Room
 
 ADMINFAG = ["RealDolos"]
 PARROTFAG = "Parrot"
+
+# pylint: disable=invalid-name
+warning, info, debug = logging.warning, logging.info, logging.debug
+error = partial(logging.error, exc_info=True)
+# pylint: enable=invalid-name
 
 
 def to_size(num, suffix='B'):
@@ -68,7 +74,7 @@ class Command:
     def post(self, msg, *args, **kw):
         msg = msg.format(*args, **kw)[:300]
         if not self.active:
-            logging.info("Swallowed %s", msg)
+            info("Swallowed %s", msg)
             return
         self.room.post_chat(msg)
 
@@ -134,7 +140,7 @@ class DefineCommand(PhraseCommand, Command):
 
         phrase, remainder = list(i.strip() for i in remainder.split(" ", 1))
         if not phrase or not remainder:
-            logging.warning("Rejecting empty define")
+            warning("Rejecting empty define")
             return True
 
         phrase = phrase.casefold()
@@ -145,7 +151,7 @@ class DefineCommand(PhraseCommand, Command):
         existing = self.get_phrase(phrase)
         admin = self.isadmin(msg)
         if existing and existing.locked and not admin:
-            logging.warning("Rejecting logged define for %s", phrase)
+            warning("Rejecting logged define for %s", phrase)
             self.post("{}: {} says sodomize yerself!",
                       msg.nick, self.nonotify(self.admins[0]))
             return True
@@ -270,7 +276,7 @@ class RoomStatsCommand(Command):
         filters = self._gen_filters(remainder)
         files = list(f for f in self.room.files
                      if all(fi(f) for fi in filters))
-        logging.info("Filtered %d files", len(files))
+        info("Filtered %d files", len(files))
 
         counts, types, exts, total = self._count(files)
 
@@ -369,11 +375,10 @@ class ChatHandler:
             try:
                 handlers += cand(room, admin),
             except Exception:
-                logging.error("Failed to initialize handler %s",
-                              str(cand), exc_info=True)
+                error("Failed to initialize handler %s", str(cand))
         self.handlers = sorted(handlers, key=repr)
-        logging.info("Initialized handlers %s",
-                     ", ".join(repr(h) for h in self.handlers))
+        info("Initialized handlers %s",
+             ", ".join(repr(h) for h in self.handlers))
 
     def __call__(self, msg):
         if msg.nick == self.room.user.name:
@@ -389,8 +394,8 @@ class ChatHandler:
                 if handler.handles(cmd) and handler(cmd, remainder, msg):
                     return
             except Exception:
-                logging.error("Failed to procss command %s with handler %s",
-                              cmd, repr(handler), exc_info=True)
+                error("Failed to procss command %s with handler %s",
+                      cmd, repr(handler))
 
 
 def main():
@@ -433,12 +438,12 @@ def main():
                     try:
                         room.user.login(args.passwd)
                     except Exception:
-                        logging.error("Failed to login", exc_info=True)
+                        error("Failed to login")
                         return 1
                 handler = ChatHandler(room, args.admins, args.noparrot)
                 room.listen(onmessage=handler)
         except Exception:
-            logging.error("Died, respawning", exc_info=True)
+            error("Died, respawning")
     return 0
 
 if __name__ == "__main__":
