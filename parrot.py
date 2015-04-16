@@ -33,10 +33,11 @@ import sys
 
 from collections import namedtuple, defaultdict
 from functools import partial
+from io import BytesIO
 from math import log2
 from statistics import mean, median, stdev
 from threading import Thread
-from time import sleep
+from time import sleep, time
 
 from volapi import Room
 
@@ -117,6 +118,7 @@ class DBCommand:
 
 class PhraseCommand(DBCommand):
     phrase = namedtuple("Phrase", ["phrase", "text", "locked"])
+    changed = 0
 
     @staticmethod
     def to_phrase(data):
@@ -136,11 +138,39 @@ class PhraseCommand(DBCommand):
         cur = self.conn.cursor()
         cur.execute("INSERT OR REPLACE INTO phrases VALUES(?, ?, ?, ?)",
                     (phrase.casefold(), text, 1 if locked else 0, owner))
+        PhraseCommand.changed = time()
+        info("changed %d", self.changed)
 
     def unlock_phrase(self, phrase):
         cur = self.conn.cursor()
         cur.execute("UPDATE phrases SET locked = 0 WHERE phrase = ?",
                     (phrase.casefold(),))
+
+
+class PhrasesUploadCommand(Command, PhraseCommand):
+    handlers = "!phrases"
+    uploaded = 0
+    upload = None
+
+    def __call__(self, cmd, remainder, msg):
+        if not self.allowed(msg):
+            return True
+        valid = self.upload
+        if valid:
+            valid = {f.id: f for f in self.room.files}.get(valid)
+            valid = valid and not valid.expired
+        info("valid %s %d %d", valid, self.uploaded, PhraseCommand.changed)
+        if not self.upload or self.uploaded < PhraseCommand.changed:
+            cur = self.conn.cursor()
+            phrases = "\r\n".join("{}|{}".format(*row)
+                                  for row in cur.execute("SELECT phrase, text "
+                                                         "FROM phrases "
+                                                         "ORDER BY phrase"))
+            with BytesIO(bytes(phrases, "utf-8")) as upload:
+                self.upload = self.room.upload_file(upload,
+                                                    upload_as="phrases.txt")
+                self.uploaded = time()
+        self.post("{}: @{}", remainder or msg.nick, self.upload)
 
 
 class DiscoverCommand(DBCommand, Command):
