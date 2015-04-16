@@ -32,7 +32,10 @@ import sys
 
 from collections import namedtuple, defaultdict
 from functools import partial
+from math import log2
 from statistics import mean, median, stdev
+from threading import Thread
+from time import sleep
 
 from volapi import Room
 
@@ -90,14 +93,7 @@ class Command:
 
 
 def _init_conn():
-    phrase = namedtuple("Phrase", ["phrase", "text", "locked"])
-
-    def to_phrase(cursor, data):
-        cursor = cursor
-        return phrase(*data)
-
     conn = sqlite3.connect("phrases2.db")
-    conn.row_factory = to_phrase
     conn.isolation_level = None
     conn.execute("CREATE TABLE IF NOT EXISTS phrases ("
                  "phrase TEXT PRIMARY KEY, "
@@ -105,20 +101,35 @@ def _init_conn():
                  "locked INT, "
                  "owner TEXT"
                  ")")
+    conn.execute("CREATE TABLE IF NOT EXISTS rooms ("
+                 "room TEXT PRIMARY KEY, "
+                 "users INT, "
+                 "files INT, "
+                 "alive INT DEFAULT 1"
+                 ")")
     return conn
 
 
-class PhraseCommand:
+class DBCommand:
     conn = _init_conn()
+
+
+class PhraseCommand(DBCommand):
+    phrase = namedtuple("Phrase", ["phrase", "text", "locked"])
+
+    @staticmethod
+    def to_phrase(data):
+        return PhraseCommand.phrase(*data)
 
     def get_phrase(self, phrase):
         phrase = phrase.casefold()
         if not phrase:
             return None
         cur = self.conn.cursor()
-        return cur.execute("SELECT phrase, text, locked FROM phrases "
-                           "WHERE phrase = ?",
-                           (phrase,)).fetchone()
+        ph = cur.execute("SELECT phrase, text, locked FROM phrases "
+                         "WHERE phrase = ?",
+                         (phrase,)).fetchone()
+        return self.to_phrase(ph) if ph else ph
 
     def set_phrase(self, phrase, text, locked, owner):
         cur = self.conn.cursor()
@@ -129,6 +140,123 @@ class PhraseCommand:
         cur = self.conn.cursor()
         cur.execute("UPDATE phrases SET locked = 0 WHERE phrase = ?",
                     (phrase.casefold(),))
+
+
+class DiscoverCommand(DBCommand, Command):
+    handlers = "!addroom", "!delroom", "!discover"
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self._thread = Thread(target=self._refresh, daemon=True)
+        self._thread.start()
+
+    def _stat(self, room):
+        with Room(room) as remote:
+            remote.listen(onusercount=lambda x: False)
+            return max(remote.user_count - 1, 0), len(remote.files)
+
+    def _refresh(self):
+        conn = _init_conn()
+
+        while True:
+            info("refreshing")
+            try:
+                cur = conn.cursor()
+                rooms = cur.execute("SELECT room FROM rooms "
+                                    "ORDER BY RANDOM() LIMIT 4").fetchall()
+                for (room,) in rooms:
+                    try:
+                        users, files = self._stat(room)
+                        cur.execute("UPDATE rooms set users = ?, files = ?, "
+                                    "alive = 1 "
+                                    "WHERE room = ?",
+                                    (users, files, room))
+                    except Exception:
+                        cur.execute("UPDATE rooms SET alive = 0 "
+                                    "WHERE room = ?",
+                                    (room,))
+                        error("Failed to stat room")
+            except Exception:
+                error("Failed to refresh rooms")
+
+            sleep(2 * 60)
+
+    def __call__(self, cmd, remainder, msg):
+        if cmd == "!addroom":
+            return self.add_room(msg)
+
+        if cmd == "!delroom":
+            return self.del_room(msg)
+
+        nick = remainder or msg.nick
+        if self.allowed(msg):
+            self.post("{}: {}", nick, self.make(295 - len(nick)))
+        return True
+
+    def make(self, maxlen):
+        cur = self.conn.cursor()
+        rooms = sorted(cur.execute("SELECT room, users, files FROM rooms "
+                                   "WHERE alive <> 0 AND room <> ?",
+                                   (self.room.name,)),
+                       key=lambda x: x[1] * log2(max(1, x[2])),
+                       reverse=True)
+        result = []
+        for room, users, files in rooms:
+            cur = "#{} ({}/{})".format(room, users, files)
+            if len(cur) > maxlen:
+                break
+            result += cur,
+            maxlen -= len(cur) + 1
+        if not result:
+            return "There are no rooms, there is only kok"
+        return " ".join(result)
+
+    def add_room(self, msg):
+        if not self.allowed(msg):
+            self.post("{}: No rooms for you", msg.nick)
+            return True
+
+        if not len(msg.rooms) == 1:
+            warning("No room supplied")
+            return True
+
+        room = list(msg.rooms.keys())[0]
+        if room.startswith("#"):
+            room = room[1:]
+
+        try:
+            users, files = self._stat(room)
+        except Exception:
+            error("Failed to retrieve room info for %s", room)
+            self.post("{}: Invalid room you cuck", msg.nick)
+            return True
+
+        info("Added Room %s with (%d/%d)", room, users, files)
+        self.conn.cursor().execute("INSERT OR REPLACE INTO rooms "
+                                   "(room, users, files) "
+                                   "VALUES(?, ?, ?)",
+                                   (room, users, files))
+        self.post("{}: Added moar CP", msg.nick)
+        return True
+
+    def del_room(self, msg):
+        if not self.isadmin(msg):
+            self.post("{}: No rooms for you", msg.nick)
+            return True
+
+        if not len(msg.rooms) == 1:
+            warning("No room supplied")
+            return True
+
+        room = list(msg.rooms.keys())[0]
+        if room.startswith("#"):
+            room = room[1:]
+
+        self.conn.cursor().execute("DELETE FROM rooms WHERE "
+                                   "room = ?",
+                                   (room,))
+        self.post("{}: Nuked that room", msg.nick)
+        return True
 
 
 class DefineCommand(PhraseCommand, Command):
