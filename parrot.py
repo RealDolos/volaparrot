@@ -386,7 +386,7 @@ class Stat:
 
     @property
     def stdev(self):
-        return to_size(stdev(self.sizes))
+        return to_size(stdev(self.sizes) if len(self.sizes) > 1 else 0.0)
 
 
 class RoomStatsCommand(Command):
