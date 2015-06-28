@@ -24,24 +24,32 @@ THE SOFTWARE.
 # pylint: disable=missing-docstring,broad-except,too-few-public-methods
 # pylint: disable=bad-continuation,star-args
 
-import logging
+import html
 import inspect
-import sqlite3
+import logging
 import os
 import random
+import re
+import sqlite3
 import sys
 
 from collections import namedtuple, defaultdict
-from functools import partial
+from functools import partial, lru_cache
 from io import BytesIO
-from math import log2
+from math import log10 as log
 from statistics import mean, median, stdev
 from threading import Thread
 from time import sleep, time
 
+import isodate
+
 from volapi import Room
+from requests import Session
+
+r = Session()
 
 ADMINFAG = ["RealDolos"]
+BLACKFAGS = [i.casefold() for i in ("apha", "merc", "myon", "loliq", "annoying", "bot")]
 PARROTFAG = "Parrot"
 
 # pylint: disable=invalid-name
@@ -105,6 +113,7 @@ def _init_conn():
                  ")")
     conn.execute("CREATE TABLE IF NOT EXISTS rooms ("
                  "room TEXT PRIMARY KEY, "
+                 "title TEXT, "
                  "users INT, "
                  "files INT, "
                  "alive INT DEFAULT 1"
@@ -117,7 +126,7 @@ class DBCommand:
 
 
 class PhraseCommand(DBCommand):
-    phrase = namedtuple("Phrase", ["phrase", "text", "locked"])
+    phrase = namedtuple("Phrase", ["phrase", "text", "locked", "owner"])
     changed = 0
 
     @staticmethod
@@ -129,7 +138,7 @@ class PhraseCommand(DBCommand):
         if not phrase:
             return None
         cur = self.conn.cursor()
-        phrase = cur.execute("SELECT phrase, text, locked FROM phrases "
+        phrase = cur.execute("SELECT phrase, text, locked, owner FROM phrases "
                              "WHERE phrase = ?",
                              (phrase,)).fetchone()
         return self.to_phrase(phrase) if phrase else phrase
@@ -144,6 +153,11 @@ class PhraseCommand(DBCommand):
     def unlock_phrase(self, phrase):
         cur = self.conn.cursor()
         cur.execute("UPDATE phrases SET locked = 0 WHERE phrase = ?",
+                    (phrase.casefold(),))
+
+    def del_phrase(self, phrase):
+        cur = self.conn.cursor()
+        cur.execute("DELETE FROM phrases WHERE phrase = ?",
                     (phrase.casefold(),))
 
 
@@ -185,7 +199,7 @@ class DiscoverCommand(DBCommand, Command):
     def _stat(room):
         with Room(room) as remote:
             remote.listen(onusercount=lambda x: False)
-            return max(remote.user_count - 1, 0), len(remote.files)
+            return remote.title, max(remote.user_count - 1, 0), len(remote.files), remote.config.get("disabled")
 
     def _refresh(self):
         conn = _init_conn()
@@ -198,11 +212,16 @@ class DiscoverCommand(DBCommand, Command):
                                     "ORDER BY RANDOM() LIMIT 4").fetchall()
                 for (room,) in rooms:
                     try:
-                        users, files = self._stat(room)
-                        cur.execute("UPDATE rooms set users = ?, files = ?, "
-                                    "alive = 1 "
-                                    "WHERE room = ?",
-                                    (users, files, room))
+                        title, users, files, disabled = self._stat(room)
+                        if disabled:
+                            warning("Killing disabled room")
+                            cur.execute("DELETE FROM rooms WHERE room = ?", (room,))
+                        else:
+                            info("Updated %s %s", room, title)
+                            cur.execute("UPDATE rooms set title = ?, users = ?, files = ?, "
+                                        "alive = 1 "
+                                        "WHERE room = ?",
+                                        (title, users, files, room))
                     except Exception:
                         cur.execute("UPDATE rooms SET alive = 0 "
                                     "WHERE room = ?",
@@ -215,25 +234,36 @@ class DiscoverCommand(DBCommand, Command):
 
     def __call__(self, cmd, remainder, msg):
         if cmd == "!addroom":
-            return self.add_room(msg)
+            if not self.allowed(msg):
+                self.post("{}: No rooms for you", msg.nick)
+                return True
+            if self.add_room(msg):
+                self.post("{}: Added moar CP", msg.nick)
+                return True
+            return False
 
         if cmd == "!delroom":
             return self.del_room(msg)
 
         nick = remainder or msg.nick
-        if self.allowed(msg):
-            self.post("{}: {}", nick, self.make(295 - len(nick)))
+
+        self.post("{}: {}", nick, self.make(295 - len(nick)))
         return True
 
-    def make(self, maxlen):
+    @property
+    def rooms(self):
         cur = self.conn.cursor()
-        rooms = sorted(cur.execute("SELECT room, users, files FROM rooms "
+        rooms = sorted(cur.execute("SELECT room, title, users, files FROM rooms "
                                    "WHERE alive <> 0 AND room <> ?",
                                    (self.room.name,)),
-                       key=lambda x: x[1] * log2(max(1, x[2])),
+                       key=lambda x: ((x[2] + 1) * log(max(2, x[3])), x[0]),
                        reverse=True)
+        return rooms
+
+    def make(self, maxlen):
+        rooms = self.rooms
         result = []
-        for room, users, files in rooms:
+        for room, title, users, files in rooms:
             cur = "#{} ({}/{})".format(room, users, files)
             if len(cur) > maxlen:
                 break
@@ -244,31 +274,39 @@ class DiscoverCommand(DBCommand, Command):
         return " ".join(result)
 
     def add_room(self, msg):
-        if not self.allowed(msg):
-            self.post("{}: No rooms for you", msg.nick)
+        if len(msg.rooms) < 1:
             return True
 
-        if not len(msg.rooms) == 1:
-            warning("No room supplied")
-            return True
+        rooms = list(msg.rooms.keys())
+        thread = Thread(target=partial(self._add_rooms, rooms, self.rooms), daemon=True)
+        thread.start()
+        return True
 
-        room = list(msg.rooms.keys())[0]
+    def _add_rooms(self, rooms, known):
+        for room in rooms:
+            self.add_one_room(room, known)
+
+    def add_one_room(self, room, known):
         if room.startswith("#"):
             room = room[1:]
+        if room in list(r[0] for r in known):
+            info("Room %s already known", room)
+            return False
 
         try:
-            users, files = self._stat(room)
+            info("Stating %s", room)
+            title, users, files, disabled = self._stat(room)
+            if disabled:
+                return False
         except Exception:
             error("Failed to retrieve room info for %s", room)
-            self.post("{}: Invalid room you cuck", msg.nick)
-            return True
+            return False
 
         info("Added Room %s with (%d/%d)", room, users, files)
-        self.conn.cursor().execute("INSERT OR REPLACE INTO rooms "
-                                   "(room, users, files) "
-                                   "VALUES(?, ?, ?)",
-                                   (room, users, files))
-        self.post("{}: Added moar CP", msg.nick)
+        _init_conn().cursor().execute("INSERT OR REPLACE INTO rooms "
+                                       "(room, title, users, files) "
+                                       "VALUES(?, ?, ?, ?)",
+                                       (room, title, users, files))
         return True
 
     def del_room(self, msg):
@@ -289,6 +327,40 @@ class DiscoverCommand(DBCommand, Command):
                                    (room,))
         self.post("{}: Nuked that room", msg.nick)
         return True
+
+class MoarDiscoverCommand(DiscoverCommand):
+    dirty = True
+    fid = 0
+
+    def handles(self, cmd):
+        return bool(cmd)
+
+    def __call__(self, cmd, remainder, msg):
+        if cmd == "!fulldiscover":
+            if not self.allowed(msg):
+                return
+
+            if MoarDiscoverCommand.dirty or not self.room.filedict.get(MoarDiscoverCommand.fid):
+                result = []
+                result += "{:>3}  {:10} {:>6} {:>6} {}".format("#", "Room", "Users", "Files", "Title"),
+                for i, (room, title, users, files) in enumerate(self.rooms):
+                    result += "{:>3}. {:10} {:>6} {:>6} {}".format(i + 1, room, users, files, title),
+                result = "\n".join(result)
+                warning("%s", result)
+                result = bytes(result, "utf-8")
+                MoarDiscoverCommand.fid = self.room.upload_file(BytesIO(result),
+                                                                upload_as="rooms.txt")
+                MoarDiscoverCommand.dirty = False
+
+            if MoarDiscoverCommand.fid:
+                self.post("{}: @{}", remainder or msg.nick, MoarDiscoverCommand.fid)
+            return
+
+        if msg.nick.lower() == "chen" or msg.nick.lower() == "fishy":
+            return
+
+        if self.add_room(msg):
+            MoarDiscoverCommand.dirty = True
 
 
 class DefineCommand(PhraseCommand, Command):
@@ -337,14 +409,17 @@ class AdminActivateCommand(Command):
         return True
 
 
-class AdminUnlockCommand(PhraseCommand, Command):
-    handlers = "!unlock"
+class AdminDefineCommand(PhraseCommand, Command):
+    handlers = "!unlock", "!undef"
 
     def __call__(self, cmd, remainder, msg):
         if not self.isadmin(msg):
             self.post("{}: FUCK YOU!", msg.nick)
             return True
-        self.unlock_phrase(remainder)
+        if cmd == "!undef":
+            self.del_phrase(remainder)
+        elif cmd == "!unlock":
+            self.unlock_phrase(remainder)
         self.post("Yes master {}", msg.nick)
         return True
 
@@ -522,22 +597,43 @@ class EightballCommand(Command):
         return True
 
 
+class XDanielCommand(Command):
+    handlers = "!siberia", "!cyberia"
+
+    def __call__(self, cmd, remainder, msg):
+        nick = remainder.strip() or msg.nick
+        self.post("{}: Daniel, also Maksim aka Maxim, also Nigredo, free APKs for everybody, {}'s friend", nick, self.nonotify("kALyX"))
+        return True
+
 class XResponderCommand(PhraseCommand, Command):
     def handles(self, cmd):
-        yield bool(cmd)
+        return bool(cmd)
 
     def __call__(self, cmd, remainder, msg):
         lmsg = msg.msg.lower()
         nick = msg.nick
 
         if cmd.startswith("!"):
+            if not self.allowed(msg):
+                return False
+            if cmd == "!who":
+                cmd = (remainder or "").strip()
+                if cmd.startswith("!"):
+                    cmd = cmd[1:]
+                if not cmd:
+                    return False
+                phrase = self.get_phrase(cmd)
+                if not phrase:
+                    return False
+                self.post("{}: {} was created by the cuck {}", nick, cmd, self.nonotify(phrase.owner or "System"))
+                return True
             phrase = self.get_phrase(cmd[1:])
             if phrase:
                 self.post("{}: {}", remainder or nick, phrase.text)
-                return
+                return True
 
         if not self.shitposting:
-            return
+            return False
 
         if lmsg in ("kek", "lel", "lol"):
             self.post("*ʞoʞ")
@@ -554,9 +650,171 @@ class XResponderCommand(PhraseCommand, Command):
                 and "download" in lmsg):
             self.post("{}: STFU, nobody in here can do anything about it!",
                       nick)
-        if "ALKON" == nick or "ALK0N" == nick:
+        if "ALKON" == nick or "ALK0N" == nick or "apha" == nick.lower():
             self.post("STFU newfag m(")
+        lmsg = "{} {}".format(nick.lower(), lmsg)
+        if "melina" in lmsg or "meiina" in lmsg or "sunna" in lmsg or "milena" in lmsg or "milana" in lmsg:
+            self.post("Melina is gross!")
+        return False
 
+@lru_cache(128)
+def get_text(u):
+    return r.get(u).text, time()
+
+@lru_cache(512)
+def get_json(u):
+    return r.get(u).json()
+
+class XYoutuberCommand(Command):
+    description = re.compile(r'itemprop="description"\s+content="(.+?)"')
+    duration = re.compile(r'itemprop="duration"\s+content="(.+?)"')
+    title = re.compile(r'itemprop="name"\s+content="(.+?)"')
+    yt = re.compile(
+        r"https?://(?:www\.)?(?:youtu\.be/\S+|youtube\.com/(?:v|watch|embed)\S+)")
+
+    def handles(self, cmd):
+        return True
+
+    def __call__(self, cmd, remainder, msg):
+        for u in self.yt.finditer(msg.msg):
+            try:
+                resp, _ = get_text(u.group(0).strip())
+                t = self.title.search(resp)
+                if not t:
+                    continue
+                t = html.unescape(t.group(1).strip())
+                if not t:
+                    continue
+                du = self.duration.search(resp)
+                if du:
+                    du = str(isodate.parse_duration(du.group(1)))
+                de = self.description.search(resp)
+                if de:
+                    de = html.unescape(de.group(1)).strip()
+                if du and de and msg.nick.lower() not in ("dongmaster", "doc"):
+                    self.post("YouTube: {} ({})\n{}", t, du, de)
+                elif du:
+                    self.post("YouTube: {} ({})", t, du)
+                elif de:
+                    self.post("YouTube: {}\n{}", t, de)
+                else:
+                    self.post("YouTube: {}", t)
+            except Exception:
+                error("youtubed")
+        return False
+
+class XLiveleakCommand(Command):
+    description = re.compile(r'property="og:description"\s+content="(.+?)"')
+    title = re.compile(r'property="og:title"\s+content="(.+?)"')
+    ll = re.compile(r"http://(?:.+?\.)?liveleak\.com/view\?[\S]+")
+
+    def handles(self, cmd):
+        return True
+
+    def __call__(self, cmd, remainder, msg):
+        for u in self.ll.finditer(msg.msg):
+            try:
+                resp, _ = get_text(u.group(0).strip())
+                t = self.title.search(resp)
+                if not t:
+                    continue
+                t = html.unescape(t.group(1).strip())
+                if not t:
+                    continue
+                de = self.description.search(resp)
+                if de:
+                    de = html.unescape(de.group(1)).strip()
+                if de:
+                    self.post("{}\n{}", t, de)
+                else:
+                    self.post("{}", t)
+            except Exception:
+                error("liveleaked")
+        return False
+
+class XIMdbCommand(Command):
+    imdb = re.compile("imdb\.com/title/(tt\d+)")
+
+    def handles(self, cmd):
+        return True
+
+    def __call__(self, cmd, remainder, msg):
+        for u in self.imdb.finditer(msg.msg):
+            try:
+                resp = get_json("http://www.omdbapi.com/?i={}&plot=short&r=json".format(u.group(1).strip()))
+                debug("%s", resp)
+                title = resp.get("Title")
+                if not resp.get("Response") == "True" or not title:
+                    continue
+                sid = resp.get("seriesID")
+                if sid:
+                    sid = get_json("http://www.omdbapi.com/?i={}&plot=short&r=json".format(sid))
+                    try:
+                        title = "{} S{:02}E{:02} - {}".format(sid.get("Title"), int(resp.get("Season", "0")), int(resp.get("Episode", "0")), title)
+                    except:
+                        error("series")
+                year = resp.get("Year", "0 BC")
+                rating = resp.get("imdbRating", "0.0")
+                rated = resp.get("Rated", "?")
+                rt = resp.get("Runtime", "over 9000 mins")
+                plot = resp.get("Plot")
+                if not plot:
+                    self.post("{}\n{}, {}, {}, {}", title, year, rating, rated, rt)
+                else:
+                    self.post("{}\n{}, {}, {}, {}\n{}", title, year, rating, rated, rt, plot)
+            except Exception:
+                error("imdbed")
+        return False
+
+
+class ChenCommand(Command):
+    def handles(self, cmd):
+        if re.match(r"\!che+n$", cmd, re.I):
+            return True
+
+    def __call__(self, cmd, remainder, msg):
+        if not self.allowed(msg):
+            return False
+        user = remainder.strip() or msg.nick
+        #self.post("{}: H{}NK", user, "O" * min(50, max(1, cmd.lower().count("e"))))
+        self.post("{}: M{}RC", user, "E" * min(50, max(1, cmd.lower().count("e"))))
+        return True
+
+
+class CheckModCommand(Command):
+    handlers = ":check"
+
+    def __call__(self, cmd, remainder, msg):
+        remainder = remainder.strip()
+        user = remainder if remainder and " " not in remainder else "MercWMouth"
+        info("Getting user %s", user)
+        try:
+            text, exp = get_text("https://volafile.io/user/{}".format(user))
+            if time() - exp > 120:
+                get_text.cache_clear()
+                get_json.cache_clear()
+                text, exp = get_text("https://volafile.io/user/{}".format(user))
+            if "Error 404" in text:
+                info("Not a user %s", user)
+                return False
+            i = get_json("https://volafile.io/rest/getUserInfo?name={}".format(user))
+            info("Not a user %s", info)
+            if i.get("staff"):
+                if user.lower() in ("kalyx", "mercwmouth", "davinci", "liquid"):
+                    self.post("Yes, unfortunately the fag {} is still a mod", user)
+                else:
+                    self.post("Yes, {} is still a mod", user)
+            else:
+                if user.lower() == "ptc":
+                    self.post("Rest in pieces, sweet jewprince")
+                elif user.lower() == "liquid":
+                    self.post("pls, Liquid will never be a mod")
+                else:
+                    self.post("{} is not a mod".format(user))
+            return True
+        except Exception:
+            error("huh?")
+            return False
 
 class ChatHandler:
     def __init__(self, room, admin, noparrot):
@@ -578,6 +836,8 @@ class ChatHandler:
 
     def __call__(self, msg):
         if msg.nick == self.room.user.name:
+            return
+        if any(i in msg.nick.casefold() for i in BLACKFAGS):
             return
 
         cmd = msg.msg.split(" ", 1)
