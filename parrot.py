@@ -710,6 +710,7 @@ class XYoutuberCommand(Command):
                 if du:
                     du = str(isodate.parse_duration(du.group(1)))
                 de = self.description.search(resp)
+                de = None
                 if de:
                     de = html.unescape(de.group(1)).strip()
                 if du and de and msg.nick.lower() not in ("dongmaster", "doc"):
