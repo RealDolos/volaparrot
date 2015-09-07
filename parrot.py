@@ -368,8 +368,9 @@ class MoarDiscoverCommand(DiscoverCommand):
                 result = "\n".join(result)
                 warning("%s", result)
                 result = bytes(result, "utf-8")
-                MoarDiscoverCommand.fid = self.room.upload_file(BytesIO(result),
-                                                                upload_as="rooms.txt")
+                if self.active:
+                    MoarDiscoverCommand.fid = self.room.upload_file(BytesIO(result),
+                                                                    upload_as="rooms.txt")
                 MoarDiscoverCommand.dirty = False
 
             if MoarDiscoverCommand.fid:
