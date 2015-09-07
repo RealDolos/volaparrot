@@ -896,6 +896,7 @@ def main():
                         type=str,
                         help="Greenfag yerself")
     parser.add_argument("--no-parrot", dest="noparrot", action="store_true")
+    parser.add_argument("--rooms", dest="rooms", type=str, default=None)
     parser.add_argument("room",
                         type=str, nargs=1,
                         help="Room to fuck up")
@@ -920,6 +921,24 @@ def main():
                         error("Failed to login")
                         return 1
                 handler = ChatHandler(room, args.admins, args.noparrot)
+                if args.rooms:
+                    rooms = list()
+                    with open(args.rooms) as roomp:
+                        for l in roomp:
+                            try:
+                                l, dummy = l.split(" ", 1)
+                            except Exception:
+                                error("Failed to parse line %s", l)
+                                continue
+                            if not l:
+                                continue
+                            rooms += l,
+                    rooms = set(rooms)
+                    if rooms:
+                        class obj:
+                            def __init__(self, **kw):
+                                self.__dict__ = kw
+                        handler(obj(nick="RealDolos", rooms=rooms, msg=""))
                 room.listen(onmessage=handler)
         except Exception:
             error("Died, respawning")
