@@ -188,6 +188,21 @@ class PhrasesUploadCommand(Command, PhraseCommand):
         self.post("{}: @{}", remainder or msg.nick, self.upload)
 
 
+class AphaCommand(Command):
+    m = {"!auxo": "auxo", "!siri": "Siri", "!apha": "apha"}
+    handlers = list(m.keys())
+
+    gnames = [i.strip() for i in open("greek2.txt") if i.strip()]
+
+    def __call__(self, cmd, remainder, msg):
+        if not self.allowed(msg):
+            return False
+        n = self.m.get(cmd.lower(), "apha")
+        with Room(self.room.name, random.choice(self.gnames)) as room:
+            room.listen(onusercount=lambda x: False)
+            room.post_chat("{}, {} wants me to let you know: {}".format(n, msg.nick, remainder))
+        return True
+
 class DiscoverCommand(DBCommand, Command):
     handlers = "!addroom", "!delroom", "!discover"
 
