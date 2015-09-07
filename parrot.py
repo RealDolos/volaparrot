@@ -857,6 +857,7 @@ class ChatHandler:
              ", ".join(repr(h) for h in self.handlers))
 
     def __call__(self, msg):
+        print(msg)
         if msg.nick == self.room.user.name:
             return
         if any(i in msg.nick.casefold() for i in BLACKFAGS):
