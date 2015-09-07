@@ -224,8 +224,8 @@ class DiscoverCommand(DBCommand, Command):
             info("refreshing")
             try:
                 cur = conn.cursor()
-                rooms = cur.execute("SELECT room FROM rooms "
-                                    "ORDER BY RANDOM() LIMIT 4").fetchall()
+                rooms = cur.execute("SELECT room FROM rooms WHERE alive <> 2 "
+                                    "ORDER BY RANDOM() LIMIT 2").fetchall()
                 for (room,) in rooms:
                     try:
                         title, users, files, disabled = self._stat(room)
@@ -238,15 +238,19 @@ class DiscoverCommand(DBCommand, Command):
                                         "alive = 1 "
                                         "WHERE room = ?",
                                         (title, users, files, room))
-                    except Exception:
-                        cur.execute("UPDATE rooms SET alive = 0 "
+                    except Exception as ex:
+                        code = 0
+                        cause = (ex and ex.__cause__) or (ex and ex.__context) or None
+                        if cause and "404" in str(cause):
+                            code = 2
+                        cur.execute("UPDATE rooms SET alive = ? "
                                     "WHERE room = ?",
-                                    (room,))
-                        error("Failed to stat room")
+                                    (code, room,))
+                        error("Failed to stat room, %d", code)
             except Exception:
                 error("Failed to refresh rooms")
+            sleep(0.4 * 60)
 
-            sleep(2 * 60)
 
     def __call__(self, cmd, remainder, msg):
         if cmd == "!addroom":
@@ -270,7 +274,7 @@ class DiscoverCommand(DBCommand, Command):
     def rooms(self):
         cur = self.conn.cursor()
         rooms = sorted(cur.execute("SELECT room, title, users, files FROM rooms "
-                                   "WHERE alive <> 0 AND room <> ?",
+                                   "WHERE alive = 1 AND room <> ?",
                                    (self.room.name,)),
                        key=lambda x: ((x[2] + 1) * log(max(2, x[3])), x[0]),
                        reverse=True)
