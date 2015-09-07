@@ -181,8 +181,9 @@ class PhrasesUploadCommand(Command, PhraseCommand):
                                                          "FROM phrases "
                                                          "ORDER BY phrase"))
             with BytesIO(bytes(phrases, "utf-8")) as upload:
-                self.upload = self.room.upload_file(upload,
-                                                    upload_as="phrases.txt")
+                if self.active:
+                    self.upload = self.room.upload_file(upload,
+                                                        upload_as="phrases.txt")
                 self.uploaded = time()
         self.post("{}: @{}", remainder or msg.nick, self.upload)
 
