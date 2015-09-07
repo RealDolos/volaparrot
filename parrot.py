@@ -945,6 +945,40 @@ def main():
             sys.exit(1)
     return 0
 
+def override_socket(bind):
+    """ Bind all sockets to specific address """
+    import socket
+
+    class BoundSocket(socket.socket):
+        """
+        requests is kinda an asshole when it comes to using source_address.
+        Also volapi is also an asshole.
+        """
+
+        def __init__(self, *args, **kw):
+            super().__init__(*args, **kw)
+
+        def connect(self, address):
+            try:
+                self.bind((bind, 0))
+            except Exception:
+                pass
+            return super().connect(address)
+
+        def connect_ex(self, address):
+            try:
+                self.bind((bind, 0))
+            except Exception:
+                pass
+            return super().connect_ex(address)
+
+        def bind(self, address):
+            super().bind(address)
+
+    socket.socket = BoundSocket
+
+
 if __name__ == "__main__":
+    #override_socket("127.0.0.1")
     logging.basicConfig(level=logging.DEBUG)
     sys.exit(main())
