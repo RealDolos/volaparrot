@@ -942,6 +942,7 @@ def main():
                 room.listen(onmessage=handler)
         except Exception:
             error("Died, respawning")
+            sys.exit(1)
     return 0
 
 if __name__ == "__main__":
