@@ -41,6 +41,7 @@ from statistics import mean, median, stdev
 from threading import Thread
 from time import sleep, time
 
+import exifread
 import isodate
 
 from volapi import Room
@@ -65,6 +66,35 @@ def to_size(num, suffix='B'):
         num /= 1024.0
 
     return "%.1f%s%s" % (num, 'Yi', suffix)
+
+
+def gps(src):
+
+    class LatStub:
+        values = "N"
+
+
+    class LonStub:
+        values = "E"
+
+
+    def deg(values):
+        d, m, s = [float(v.num) / float(v.den) for v in values]
+        return d + (m / 60.0) + (s / 3600.0)
+
+
+    if not hasattr(src, "read"):
+        src = BytesIO(src)
+    exif = exifread.process_file(src, details=False)
+    lat = deg(exif["GPS GPSLatitude"].values)
+    if exif.get("GPS GPSLatitudeRef", LatStub()).values != "N":
+        lat = 0 - lat
+    lon = deg(exif["GPS GPSLongitude"].values)
+    if exif.get("GPS GPSLongitudeRef", LonStub()).values != "E":
+        lon = 0 - lon
+    return (lat, lon,
+            "{} {}".format(exif.get("Image Make", "Unknown"),
+                           exif.get("Image Model", "Unknown")))
 
 
 class Command:
@@ -101,6 +131,8 @@ class Command:
     def allowed(self, msg):
         return not self.greens or msg.logged_in
 
+class FileCommand(Command):
+    pass
 
 def _init_conn():
     conn = sqlite3.connect("phrases2.db")
@@ -838,10 +870,44 @@ class CheckModCommand(Command):
             error("huh?")
             return False
 
+class ExifCommand(FileCommand):
+
+    def __call__(self, file):
+        if not self.active:
+            return False
+
+        u = file.url
+        ul = u.lower()
+        if not ul.endswith(".jpeg") and not ul.endswith(".jpe") and not ul.endswith(".jpg") and not ul.endswith(".png"):
+            return False
+        if file.size > 10 * 1024 * 1024:
+            info("Ignoring %s because too large", file)
+            return False
+        ttldiff = self.room.config["ttl"] - file.time_left
+        if ttldiff > 10:
+            info("Ignoring %s because too old", file)
+            return False
+
+        info("%s %s %d %d %d", file, u, file.size, file.time_left, ttldiff)
+        lat, lon, model = gps(r.get(u).content)
+        maps = "https://www.google.com/maps?f=q&q=loc:{:.7},{:.7}&t=k&spn=0.5,0.5".format(lat, lon)
+        loc = get_json("http://maps.googleapis.com/maps/api/geocode/json?latlng={:.7},{:.7}&sensor=true&language=en".format(lat, lon))
+        loc = {v.get("types")[0]: v.get("formatted_address") for v in loc["results"]}
+        useloc = None
+        for x in ("street_address", "route", "postal_code", "administrative_area_level_3", "administrative_area_level_2", "locality", "administrative_level_1", "country"):
+            useloc = loc.get(x)
+            if useloc:
+                break
+        if not useloc:
+            useloc = "Unknown place"
+        self.post("@{} {}\nGPS: {}\nModel: {}", file.id, useloc, maps, model)
+
+
 class ChatHandler:
     def __init__(self, room, admin, noparrot):
         self.room = room
         handlers = list()
+        file_handlers = list()
         for cand in globals().values():
             if not inspect.isclass(cand) or not issubclass(cand, Command) \
                     or cand is Command:
@@ -849,12 +915,20 @@ class ChatHandler:
             if noparrot and issubclass(cand, PhraseCommand):
                 continue
             try:
-                handlers += cand(room, admin),
+                if cand is FileCommand or cand is Command:
+                    continue
+                if issubclass(cand, FileCommand):
+                    file_handlers += cand(room, admin),
+                else:
+                    handlers += cand(room, admin),
             except Exception:
                 error("Failed to initialize handler %s", str(cand))
         self.handlers = sorted(handlers, key=repr)
+        self.file_handlers = sorted(file_handlers, key=repr)
         info("Initialized handlers %s",
              ", ".join(repr(h) for h in self.handlers))
+        info("Initialized file handlers %s",
+             ", ".join(repr(h) for h in self.file_handlers))
 
     def __call__(self, msg):
         print(msg)
@@ -875,6 +949,15 @@ class ChatHandler:
             except Exception:
                 error("Failed to procss command %s with handler %s",
                       cmd, repr(handler))
+
+    def __call_file__(self, file):
+        for handler in self.file_handlers:
+            try:
+                if handler(file):
+                    return
+            except Exception:
+                error("Failed to procss command %s with handler %s",
+                      file, repr(handler))
 
 
 def main():
@@ -939,7 +1022,7 @@ def main():
                             def __init__(self, **kw):
                                 self.__dict__ = kw
                         handler(obj(nick="RealDolos", rooms=rooms, msg=""))
-                room.listen(onmessage=handler)
+                room.listen(onmessage=handler, onfile=handler.__call_file__)
         except Exception:
             error("Died, respawning")
             sys.exit(1)
