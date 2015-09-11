@@ -189,13 +189,13 @@ class PhrasesUploadCommand(Command, PhraseCommand):
 
 
 class AphaCommand(Command):
-    m = {"!auxo": "auxo", "!siri": "Siri", "!apha": "apha"}
+    m = {"!auxo": "auxo", "!siri": "Siri", "!apha": "apha", "!merc": "MercWMouthAndOrDeadpoolAndOrFaggotAsswipe"}
     handlers = list(m.keys())
 
     gnames = [i.strip() for i in open("greek2.txt") if i.strip()]
 
     def __call__(self, cmd, remainder, msg):
-        if not self.allowed(msg):
+        if not self.allowed(msg) or not remainder.strip():
             return False
         n = self.m.get(cmd.lower(), "apha")
         with Room(self.room.name, random.choice(self.gnames)) as room:
