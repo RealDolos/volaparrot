@@ -24,6 +24,18 @@ THE SOFTWARE.
 # pylint: disable=missing-docstring,broad-except,too-few-public-methods
 # pylint: disable=bad-continuation,star-args
 
+import sys
+import codecs
+
+# Windows is best OS
+if sys.stdout.encoding.casefold() != "utf-8".casefold():
+    sys.stdout = codecs.getwriter(sys.stdout.encoding)(
+        sys.stdout.buffer, 'replace')
+if sys.stderr.encoding.casefold() != "utf-8".casefold():
+    sys.stderr = codecs.getwriter(sys.stderr.encoding)(
+        sys.stderr.buffer, 'replace')
+
+
 import html
 import inspect
 import logging
@@ -31,7 +43,6 @@ import os
 import random
 import re
 import sqlite3
-import sys
 
 from collections import namedtuple, defaultdict
 from functools import partial, lru_cache
