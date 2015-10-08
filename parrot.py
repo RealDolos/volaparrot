@@ -1052,16 +1052,16 @@ class CheckModCommand(Command):
             info("Not a user %s", info)
             if i.get("staff"):
                 if user.lower() in ("kalyx", "mercwmouth", "davinci", "liquid"):
-                    self.post("Yes, unfortunately the fag {} is still a mod", user)
+                    self.post("Yes, unfortunately the fag {} is still a staffer", user)
                 else:
-                    self.post("Yes, {} is still a mod", user)
+                    self.post("Yes, {} is still a staffer", user)
             else:
                 if user.lower() == "ptc":
                     self.post("Rest in pieces, sweet jewprince")
                 elif user.lower() == "liquid":
                     self.post("pls, Liquid will never be a mod")
                 else:
-                    self.post("{} is not a mod".format(user))
+                    self.post("{} is not a staffer".format(user))
             return True
         except Exception:
             error("huh?")
