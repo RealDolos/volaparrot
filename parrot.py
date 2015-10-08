@@ -61,7 +61,7 @@ from requests import Session
 r = Session()
 
 ADMINFAG = ["RealDolos"]
-BLACKFAGS = [i.casefold() for i in ("apha", "siri", "merc",  "loliq", "annoying", "bot")]
+BLACKFAGS = [i.casefold() for i in ("kalyx", "merc",  "loliq", "annoying", "bot", "RootBeats")]
 PARROTFAG = "Parrot"
 
 # pylint: disable=invalid-name
