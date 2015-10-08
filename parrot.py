@@ -51,12 +51,14 @@ from math import log10 as log
 from statistics import mean, median, stdev
 from threading import Thread
 from time import sleep, time
+from uuid import uuid4
 
 import exifread
 import isodate
 
 from volapi import Room
 from requests import Session
+from path import path
 
 r = Session()
 
@@ -152,6 +154,13 @@ def _init_conn():
     conn.execute("CREATE TABLE IF NOT EXISTS phrases ("
                  "phrase TEXT PRIMARY KEY, "
                  "text TEXT, "
+                 "locked INT, "
+                 "owner TEXT"
+                 ")")
+    conn.execute("CREATE TABLE IF NOT EXISTS files ("
+                 "phrase TEXT PRIMARY KEY, "
+                 "id TEXT, "
+                 "name TEXT, "
                  "locked INT, "
                  "owner TEXT"
                  ")")
@@ -255,6 +264,156 @@ class AphaCommand(Command):
             room.listen(onusercount=lambda x: False)
             room.post_chat("{}, {} wants me to let you know: {}".format(n, msg.nick, remainder))
         return True
+
+
+class UploadDownloadCommand(DBCommand, Command):
+    file = namedtuple("File", ["phrase", "id", "name", "locked", "owner"])
+    workingset = dict()
+
+    @staticmethod
+    def to_file(data):
+        return UploadDownloadCommand.file(*data)
+
+    def get_file(self, phrase):
+        phrase = phrase.casefold()
+        if not phrase:
+            return None
+        cur = self.conn.cursor()
+        res = cur.execute("SELECT phrase, id, name, locked, owner FROM files "
+                             "WHERE phrase = ?",
+                             (phrase,)).fetchone()
+        return self.to_file(res) if res else res
+
+    def set_file(self, phrase, name, content, locked, owner):
+        phrase = phrase.casefold()
+        if not phrase or not name or not content:
+            return None
+        newid = None
+        while not newid or newid.exists():
+            newid = path(str(uuid4()) + ".cuckload")
+        with open(newid, "wb") as op:
+            op.write(content.read() if hasattr(content, "read") else content.encode("utf-8"))
+        try:
+            cur = self.conn.cursor()
+            cur.execute("INSERT OR REPLACE INTO files (phrase, id, name, locked, owner) "
+                        "VALUES(?, ?, ?, ?, ?)",
+                        (phrase, newid, name, locked, owner))
+        except Exception:
+            error("Failed to add file")
+            try:
+                if not newid:
+                    raise Exception("huh?")
+                newid.unlink()
+            except:
+                pass
+
+    def unlock_file(self, phrase):
+        cur = self.conn.cursor()
+        cur.execute("UPDATE files SET locked = 0 WHERE phrase = ?",
+                    (phrase.casefold(),))
+
+    def del_file(self, phrase):
+        file = self.get_file(phrase)
+        if not file:
+            return
+        cur = self.conn.cursor()
+        cur.execute("DELETE FROM files WHERE phrase = ?",
+                    (file.phrase,))
+        file = path(file.id)
+        if file and file.exists():
+            try:
+                file.unlink()
+            except:
+                error("Failed to delete %s", file)
+
+    handlers = "!upload", "!download", "!delfile", "!unlockfile"
+
+    def __call__(self, cmd, remainder, msg):
+        m = getattr(self, "cmd_{}".format(cmd[1:]), None)
+        info("udcmd: %s", m)
+        return m(remainder, msg) if m else False
+
+    def cmd_upload(self, remainder, msg):
+        if not self.allowed(msg):
+            return False
+        remainder = list(i.strip() for i in remainder.split(" ", 1))
+        phrase = remainder.pop(0)
+        remainder = remainder[0] if remainder else ""
+        debug("upload: %s %s", phrase, remainder)
+        file = self.get_file(phrase)
+        debug("upload: %s", file)
+        if not file:
+            return False
+        fid = self.workingset.get(file.id, None)
+        debug("upload: %s", fid)
+        fo = None
+        try:
+            fo = self.room.filedict[fid]
+        except KeyError:
+            debug("upload: not found")
+
+        if not fo:
+            debug("upload: not present")
+            with open(file.id, "rb") as fp:
+                fid = self.room.upload_file(fp, upload_as=file.name)
+            self.workingset[file.id] = fid
+        self.post("{}: @{}", remainder or msg.nick, fid)
+        return True
+
+    def cmd_download(self, remainder, msg):
+        if not self.allowed(msg):
+            return False
+        if len(msg.files) != 1:
+            debug("download: wrong #%d", len(msg.files))
+            return False
+        if remainder[0] != "@":
+            debug("download: wrong arg %s", remainder)
+            return False
+
+        fid, phrase = list(i.strip() for i in remainder.split(" ", 1))
+        debug("download: %s %s", fid, phrase)
+        if not fid or not phrase or " " in phrase:
+            debug("download: kill %s %s", fid, phrase)
+            return False
+
+        admin = self.isadmin(msg)
+        existing = self.get_file(phrase)
+        if existing and existing.locked and not admin:
+            self.post("The file is locked... in lg188's Dutroux replacement dungeon, plsnobulli, {}", msg.nick)
+            return True
+        # download and insert new file
+        file = msg.files[0]
+        if file.size > 5 << 20:
+            self.post("My tiny ahole cannot take such a huge cock, {}", msg.nick)
+            return False
+        info("download: inserting file %s", file)
+        self.set_file(phrase, file.name, r.get(file.url, stream=True).raw, admin, msg.nick)
+
+        # remove old file
+        if existing:
+            try:
+                if not existing.id:
+                    raise Exception("what")
+                path(existing.id).unlink()
+            except:
+                pass
+        self.post("{}: KUK", msg.nick)
+        return True
+
+    def cmd_delfile(self, remainder, msg):
+        if not self.isadmin(msg):
+           self.post("Go rape a MercWMouth, {}", msg.nick)
+           return False
+        self.del_file(remainder)
+        return True
+
+    def cmd_unlockfile(self, remainder, msg):
+        if not self.isadmin(msg):
+           self.post("Dongo cannot code, {}", msg.nick)
+           return False
+        self.unlock_file(remainder)
+        return True
+
 
 class DiscoverCommand(DBCommand, Command):
     handlers = "!addroom", "!delroom", "!discover", "!room"
@@ -942,7 +1101,7 @@ class ExifCommand(FileCommand):
 
 
 class ChatHandler:
-    def __init__(self, room, admin, noparrot):
+    def __init__(self, room, args):
         self.room = room
         handlers = list()
         file_handlers = list()
@@ -950,15 +1109,17 @@ class ChatHandler:
             if not inspect.isclass(cand) or not issubclass(cand, Command) \
                     or cand is Command:
                 continue
-            if noparrot and issubclass(cand, PhraseCommand):
+            if args.noparrot and issubclass(cand, PhraseCommand):
+                continue
+            if not args.uploads and cand is UploadDownloadCommand:
                 continue
             try:
                 if cand is FileCommand or cand is Command:
                     continue
                 if issubclass(cand, FileCommand):
-                    file_handlers += cand(room, admin),
+                    file_handlers += cand(room, args.admins),
                 else:
-                    handlers += cand(room, admin),
+                    handlers += cand(room, args.admins),
             except Exception:
                 error("Failed to initialize handler %s", str(cand))
         self.handlers = sorted(handlers, key=repr)
@@ -1017,11 +1178,13 @@ def main():
                         type=str,
                         help="Greenfag yerself")
     parser.add_argument("--no-parrot", dest="noparrot", action="store_true")
+    parser.add_argument("--uploads", dest="uploads", action="store_true")
     parser.add_argument("--rooms", dest="rooms", type=str, default=None)
     parser.add_argument("room",
                         type=str, nargs=1,
                         help="Room to fuck up")
     parser.set_defaults(noparrot=False,
+                        uploads=False,
                         ded=False,
                         shitposting=False,
                         greenmasterrace=False)
@@ -1041,7 +1204,7 @@ def main():
                     except Exception:
                         error("Failed to login")
                         return 1
-                handler = ChatHandler(room, args.admins, args.noparrot)
+                handler = ChatHandler(room, args)
                 if args.rooms:
                     rooms = list()
                     with open(args.rooms) as roomp:
