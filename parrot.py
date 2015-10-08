@@ -65,8 +65,9 @@ BLACKFAGS = [i.casefold() for i in ("kalyx", "merc",  "loliq", "annoying", "bot"
 PARROTFAG = "Parrot"
 
 # pylint: disable=invalid-name
-warning, info, debug = logging.warning, logging.info, logging.debug
-error = partial(logging.error, exc_info=True)
+logger = logging.getLogger("parrot")
+warning, info, debug = logger.warning, logger.info, logger.debug
+error = partial(logger.error, exc_info=True)
 # pylint: enable=invalid-name
 
 
@@ -1074,5 +1075,6 @@ def override_socket(bind):
 
 if __name__ == "__main__":
     #override_socket("127.0.0.1")
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
+    logging.getLogger("requests").setLevel(logging.WARNING)
     sys.exit(main())
