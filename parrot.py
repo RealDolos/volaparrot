@@ -1067,6 +1067,7 @@ class CheckModCommand(Command):
             error("huh?")
             return False
 
+
 class ExifCommand(FileCommand):
 
     def __call__(self, file):
@@ -1112,6 +1113,8 @@ class ChatHandler:
             if args.noparrot and issubclass(cand, PhraseCommand):
                 continue
             if not args.uploads and cand is UploadDownloadCommand:
+                continue
+            if not args.exif and cand is ExifCommand:
                 continue
             try:
                 if cand is FileCommand or cand is Command:
@@ -1179,12 +1182,14 @@ def main():
                         help="Greenfag yerself")
     parser.add_argument("--no-parrot", dest="noparrot", action="store_true")
     parser.add_argument("--uploads", dest="uploads", action="store_true")
+    parser.add_argument("--exif", dest="uploads", action="store_true")
     parser.add_argument("--rooms", dest="rooms", type=str, default=None)
     parser.add_argument("room",
                         type=str, nargs=1,
                         help="Room to fuck up")
     parser.set_defaults(noparrot=False,
                         uploads=False,
+                        exif=False,
                         ded=False,
                         shitposting=False,
                         greenmasterrace=False)
