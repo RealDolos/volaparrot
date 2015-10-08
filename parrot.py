@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 # pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args
+# pylint: disable=bad-continuation,star-args,too-many-lines
 
 import sys
 import codecs
@@ -54,19 +54,21 @@ from time import sleep, time
 from uuid import uuid4
 
 import exifread
+# pylint: disable=import-error
 import isodate
+# pylint: enable=import-error
 
 from volapi import Room
 from requests import Session
 from path import path
 
-r = Session()
 
 ADMINFAG = ["RealDolos"]
-BLACKFAGS = [i.casefold() for i in ("kalyx", "merc",  "loliq", "annoying", "bot", "RootBeats")]
+BLACKFAGS = [i.casefold() for i in ("kalyx", "merc", "loliq", "annoying", "bot", "RootBeats")]
 PARROTFAG = "Parrot"
 
 # pylint: disable=invalid-name
+r = Session()
 logger = logging.getLogger("parrot")
 warning, info, debug = logger.warning, logger.info, logger.debug
 error = partial(logger.error, exc_info=True)
@@ -93,8 +95,8 @@ def gps(src):
 
 
     def deg(values):
-        d, m, s = [float(v.num) / float(v.den) for v in values]
-        return d + (m / 60.0) + (s / 3600.0)
+        hour, minute, sec = [float(v.num) / float(v.den) for v in values]
+        return hour + (minute / 60.0) + (sec / 3600.0)
 
 
     if not hasattr(src, "read"):
@@ -245,24 +247,28 @@ class NiggersCommand(Command):
     handlers = "!niggers"
     def __call__(self, cmd, remainder, msg):
         if not self.allowed(msg):
-            return false
-        self.post("{}, the following black gentlemen cannot use this bot: {}", msg.nick, ", ".join(BLACKFAGS))
+            return False
+        self.post("{}, the following black gentlemen cannot use this bot: {}",
+                  msg.nick, ", ".join(BLACKFAGS))
         return True
 
 
 class AphaCommand(Command):
-    m = {"!auxo": "auxo", "!siri": "Siri", "!apha": "apha", "!merc": "MercWMouthAndOrDeadpoolAndOrFaggotAsswipe"}
-    handlers = list(m.keys())
+    hue = {"!auxo": "auxo",
+           "!siri": "Siri",
+           "!apha": "apha",
+           "!merc": "MercWMouthAndOrDeadpoolAndOrFaggotAsswipe"}
+    handlers = list(hue.keys())
 
     gnames = [i.strip() for i in open("greek2.txt") if i.strip()]
 
     def __call__(self, cmd, remainder, msg):
         if not self.allowed(msg) or not remainder.strip():
             return False
-        n = self.m.get(cmd.lower(), "apha")
+        name = self.hue.get(cmd.lower(), "apha")
         with Room(self.room.name, random.choice(self.gnames)) as room:
             room.listen(onusercount=lambda x: False)
-            room.post_chat("{}, {} wants me to let you know: {}".format(n, msg.nick, remainder))
+            room.post_chat("{}, {} wants me to let you know: {}".format(name, msg.nick, remainder))
         return True
 
 
@@ -285,14 +291,15 @@ class UploadDownloadCommand(DBCommand, Command):
         return self.to_file(res) if res else res
 
     def set_file(self, phrase, name, content, locked, owner):
+        # pylint: disable=too-many-arguments
         phrase = phrase.casefold()
         if not phrase or not name or not content:
             return None
         newid = None
         while not newid or newid.exists():
             newid = path(str(uuid4()) + ".cuckload")
-        with open(newid, "wb") as op:
-            op.write(content.read() if hasattr(content, "read") else content.encode("utf-8"))
+        with open(newid, "wb") as outp:
+            outp.write(content.read() if hasattr(content, "read") else content.encode("utf-8"))
         try:
             cur = self.conn.cursor()
             cur.execute("INSERT OR REPLACE INTO files (phrase, id, name, locked, owner) "
@@ -304,7 +311,7 @@ class UploadDownloadCommand(DBCommand, Command):
                 if not newid:
                     raise Exception("huh?")
                 newid.unlink()
-            except:
+            except Exception:
                 pass
 
     def unlock_file(self, phrase):
@@ -323,15 +330,14 @@ class UploadDownloadCommand(DBCommand, Command):
         if file and file.exists():
             try:
                 file.unlink()
-            except:
+            except Exception:
                 error("Failed to delete %s", file)
 
     handlers = "!upload", "!download", "!delfile", "!unlockfile"
 
     def __call__(self, cmd, remainder, msg):
-        m = getattr(self, "cmd_{}".format(cmd[1:]), None)
-        info("udcmd: %s", m)
-        return m(remainder, msg) if m else False
+        meth = getattr(self, "cmd_{}".format(cmd[1:]), None)
+        return meth(remainder, msg) if meth else False
 
     def cmd_upload(self, remainder, msg):
         if not self.allowed(msg):
@@ -346,28 +352,22 @@ class UploadDownloadCommand(DBCommand, Command):
             return False
         fid = self.workingset.get(file.id, None)
         debug("upload: %s", fid)
-        fo = None
+        fileobj = None
         try:
-            fo = self.room.filedict[fid]
+            fileobj = self.room.filedict[fid]
         except KeyError:
             debug("upload: not found")
 
-        if not fo:
+        if not fileobj:
             debug("upload: not present")
-            with open(file.id, "rb") as fp:
-                fid = self.room.upload_file(fp, upload_as=file.name)
+            with open(file.id, "rb") as filep:
+                fid = self.room.upload_file(filep, upload_as=file.name)
             self.workingset[file.id] = fid
         self.post("{}: @{}", remainder or msg.nick, fid)
         return True
 
     def cmd_download(self, remainder, msg):
-        if not self.allowed(msg):
-            return False
-        if len(msg.files) != 1:
-            debug("download: wrong #%d", len(msg.files))
-            return False
-        if remainder[0] != "@":
-            debug("download: wrong arg %s", remainder)
+        if not self.allowed(msg) or len(msg.files) != 1 or remainder[0] != "@":
             return False
 
         fid, phrase = list(i.strip() for i in remainder.split(" ", 1))
@@ -379,38 +379,39 @@ class UploadDownloadCommand(DBCommand, Command):
         admin = self.isadmin(msg)
         existing = self.get_file(phrase)
         if existing and existing.locked and not admin:
-            self.post("The file is locked... in lg188's Dutroux replacement dungeon, plsnobulli, {}", msg.nick)
+            self.post("The file is locked... in lg188's Dutroux replacement "
+                      "dungeon, plsnobulli, {}", msg.nick)
             return True
-        # download and insert new file
+
         file = msg.files[0]
         if file.size > 5 << 20:
             self.post("My tiny ahole cannot take such a huge cock, {}", msg.nick)
             return False
+
         info("download: inserting file %s", file)
         self.set_file(phrase, file.name, r.get(file.url, stream=True).raw, admin, msg.nick)
 
-        # remove old file
         if existing:
             try:
                 if not existing.id:
                     raise Exception("what")
                 path(existing.id).unlink()
-            except:
+            except Exception:
                 pass
         self.post("{}: KUK", msg.nick)
         return True
 
     def cmd_delfile(self, remainder, msg):
         if not self.isadmin(msg):
-           self.post("Go rape a MercWMouth, {}", msg.nick)
-           return False
+            self.post("Go rape a MercWMouth, {}", msg.nick)
+            return False
         self.del_file(remainder)
         return True
 
     def cmd_unlockfile(self, remainder, msg):
         if not self.isadmin(msg):
-           self.post("Dongo cannot code, {}", msg.nick)
-           return False
+            self.post("Dongo cannot code, {}", msg.nick)
+            return False
         self.unlock_file(remainder)
         return True
 
@@ -427,7 +428,8 @@ class DiscoverCommand(DBCommand, Command):
     def _stat(room):
         with Room(room) as remote:
             remote.listen(onusercount=lambda x: False)
-            return remote.title, max(remote.user_count - 1, 0), len(remote.files), remote.config.get("disabled")
+            return (remote.title, max(remote.user_count - 1, 0),
+                    len(remote.files), remote.config.get("disabled"))
 
     def _refresh(self):
         conn = _init_conn()
@@ -452,7 +454,7 @@ class DiscoverCommand(DBCommand, Command):
                                         (title, users, files, room))
                     except Exception as ex:
                         code = 0
-                        cause = (ex and ex.__cause__) or (ex and ex.__context) or None
+                        cause = (ex and ex.__cause__) or (ex and ex.__context__) or None
                         if cause and "404" in str(cause):
                             code = 2
                         cur.execute("UPDATE rooms SET alive = ? "
@@ -494,7 +496,8 @@ class DiscoverCommand(DBCommand, Command):
         cur = self.conn.cursor()
         if limit:
             rooms = sorted(cur.execute("SELECT room, title, users, files FROM rooms "
-                                       "WHERE alive = 1 AND room <> ? AND title LIKE ? COLLATE NOCASE",
+                                       "WHERE alive = 1 AND room <> ? "
+                                       "AND title LIKE ? COLLATE NOCASE",
                                        (self.room.name, "%{}%".format(limit))),
                            key=lambda x: ((x[2] + 1) * log(max(2, x[3])), x[0]),
                            reverse=True)
@@ -507,12 +510,13 @@ class DiscoverCommand(DBCommand, Command):
         return rooms
 
     @property
-    def rooms(self): return self.get_rooms()
+    def rooms(self):
+        return self.get_rooms()
 
     def make(self, maxlen, limit):
         rooms = self.get_rooms(limit)
         result = []
-        for room, title, users, files in rooms:
+        for room, _, users, files in rooms:
             cur = "#{} ({}/{})".format(room, users, files)
             if len(cur) > maxlen:
                 break
@@ -589,11 +593,14 @@ class MoarDiscoverCommand(DiscoverCommand):
             if not self.allowed(msg):
                 return
 
-            if MoarDiscoverCommand.dirty or not self.room.filedict.get(MoarDiscoverCommand.fid):
+            if MoarDiscoverCommand.dirty or \
+                    not self.room.filedict.get(MoarDiscoverCommand.fid):
                 result = []
-                result += "{:>3}  {:10} {:>6} {:>6} {}".format("#", "Room", "Users", "Files", "Title"),
+                result += "{:>3}  {:10} {:>6} {:>6} {}".format(
+                    "#", "Room", "Users", "Files", "Title"),
                 for i, (room, title, users, files) in enumerate(self.rooms):
-                    result += "{:>3}. {:10} {:>6} {:>6} {}".format(i + 1, room, users, files, title),
+                    result += "{:>3}. {:10} {:>6} {:>6} {}".format(
+                        i + 1, room, users, files, title),
                 result = "\n".join(result)
                 warning("%s", result)
                 result = bytes(result, "utf-8")
@@ -852,7 +859,9 @@ class XDanielCommand(Command):
 
     def __call__(self, cmd, remainder, msg):
         nick = remainder.strip() or msg.nick
-        self.post("{}: Daniel, also Maksim aka Maxim, also Nigredo, free APKs for everybody, {}'s friend", nick, self.nonotify("kALyX"))
+        self.post("{}: Daniel, also Maksim aka Maxim, also Nigredo, "
+                  "free APKs for everybody, {}'s friend",
+                  nick, self.nonotify("kALyX"))
         return True
 
 class XResponderCommand(PhraseCommand, Command):
@@ -860,7 +869,6 @@ class XResponderCommand(PhraseCommand, Command):
         return bool(cmd)
 
     def __call__(self, cmd, remainder, msg):
-        lmsg = msg.msg.lower()
         nick = msg.nick
 
         if cmd.startswith("!"):
@@ -875,16 +883,20 @@ class XResponderCommand(PhraseCommand, Command):
                 phrase = self.get_phrase(cmd)
                 if not phrase:
                     return False
-                self.post("{}: {} was created by the cuck {}", nick, cmd, self.nonotify(phrase.owner or "System"))
+                self.post("{}: {} was created by the cuck {}",
+                          nick, cmd, self.nonotify(phrase.owner or "System"))
                 return True
+
             phrase = self.get_phrase(cmd[1:])
             if phrase:
                 self.post("{}: {}", remainder or nick, phrase.text)
                 return True
 
-        if not self.shitposting:
-            return False
+        return self.shitposting and self.shitpost(nick, msg)
 
+
+    def shitpost(self, nick, msg):
+        lmsg = msg.msg.lower()
         if lmsg in ("kek", "lel", "lol"):
             self.post("*ʞoʞ")
         if lmsg in ("ay", "ayy", "ayyy", "ayyyy"):
@@ -903,96 +915,102 @@ class XResponderCommand(PhraseCommand, Command):
         if "ALKON" == nick or "ALK0N" == nick or "apha" == nick.lower():
             self.post("STFU newfag m(")
         lmsg = "{} {}".format(nick.lower(), lmsg)
-        if "melina" in lmsg or "meiina" in lmsg or "sunna" in lmsg or "milena" in lmsg or "milana" in lmsg:
+        if ("melina" in lmsg or "meiina" in lmsg or "sunna" in lmsg or
+                "milena" in lmsg or "milana" in lmsg):
             self.post("Melina is gross!")
         return False
 
+
 @lru_cache(128)
-def get_text(u):
-    return r.get(u).text, time()
+def get_text(url):
+    return r.get(url).text, time()
+
 
 @lru_cache(512)
-def get_json(u):
-    return r.get(u).json()
+def get_json(url):
+    return r.get(url).json()
 
 class XYoutuberCommand(Command):
     description = re.compile(r'itemprop="description"\s+content="(.+?)"')
     duration = re.compile(r'itemprop="duration"\s+content="(.+?)"')
     title = re.compile(r'itemprop="name"\s+content="(.+?)"')
-    yt = re.compile(
+    youtube = re.compile(
         r"https?://(?:www\.)?(?:youtu\.be/\S+|youtube\.com/(?:v|watch|embed)\S+)")
 
     def handles(self, cmd):
         return True
 
     def __call__(self, cmd, remainder, msg):
-        for u in self.yt.finditer(msg.msg):
+        for url in self.youtube.finditer(msg.msg):
             try:
-                resp, _ = get_text(u.group(0).strip())
-                t = self.title.search(resp)
-                if not t:
+                resp, _ = get_text(url.group(0).strip())
+                title = self.title.search(resp)
+                if not title:
                     continue
-                t = html.unescape(t.group(1).strip())
-                if not t:
+                title = html.unescape(title.group(1).strip())
+                if not title:
                     continue
-                du = self.duration.search(resp)
-                if du:
-                    du = str(isodate.parse_duration(du.group(1)))
-                de = self.description.search(resp)
-                de = None
-                if de:
-                    de = html.unescape(de.group(1)).strip()
-                if du and de and msg.nick.lower() not in ("dongmaster", "doc"):
-                    self.post("YouTube: {} ({})\n{}", t, du, de)
-                elif du:
-                    self.post("YouTube: {} ({})", t, du)
-                elif de:
-                    self.post("YouTube: {}\n{}", t, de)
+                duration = self.duration.search(resp)
+                if duration:
+                    duration = str(isodate.parse_duration(duration.group(1)))
+                desc = self.description.search(resp)
+                desc = None
+                if desc:
+                    desc = html.unescape(desc.group(1)).strip()
+                if duration and desc and msg.nick.lower() not in ("dongmaster", "doc"):
+                    self.post("YouTube: {} ({})\n{}", title, duration, desc)
+                elif duration:
+                    self.post("YouTube: {} ({})", title, duration)
+                elif desc:
+                    self.post("YouTube: {}\n{}", title, desc)
                 else:
-                    self.post("YouTube: {}", t)
+                    self.post("YouTube: {}", title)
             except Exception:
                 error("youtubed")
         return False
 
+
 class XLiveleakCommand(Command):
     description = re.compile(r'property="og:description"\s+content="(.+?)"')
     title = re.compile(r'property="og:title"\s+content="(.+?)"')
-    ll = re.compile(r"http://(?:.+?\.)?liveleak\.com/view\?[\S]+")
+    liveleak = re.compile(r"http://(?:.+?\.)?liveleak\.com/view\?[\S]+")
 
     def handles(self, cmd):
         return True
 
     def __call__(self, cmd, remainder, msg):
-        for u in self.ll.finditer(msg.msg):
+        for url in self.liveleak.finditer(msg.msg):
             try:
-                resp, _ = get_text(u.group(0).strip())
-                t = self.title.search(resp)
-                if not t:
+                resp, _ = get_text(url.group(0).strip())
+                title = self.title.search(resp)
+                if not title:
                     continue
-                t = html.unescape(t.group(1).strip())
-                if not t:
+                title = html.unescape(title.group(1).strip())
+                if not title:
                     continue
-                de = self.description.search(resp)
-                if de:
-                    de = html.unescape(de.group(1)).strip()
-                if de:
-                    self.post("{}\n{}", t, de)
+                desc = self.description.search(resp)
+                if desc:
+                    desc = html.unescape(desc.group(1)).strip()
+                if desc:
+                    self.post("{}\n{}", title, desc)
                 else:
-                    self.post("{}", t)
+                    self.post("{}", title)
             except Exception:
                 error("liveleaked")
         return False
 
+
 class XIMdbCommand(Command):
-    imdb = re.compile("imdb\.com/title/(tt\d+)")
+    imdb = re.compile(r"imdb\.com/title/(tt\d+)")
 
     def handles(self, cmd):
         return True
 
     def __call__(self, cmd, remainder, msg):
-        for u in self.imdb.finditer(msg.msg):
+        for url in self.imdb.finditer(msg.msg):
             try:
-                resp = get_json("http://www.omdbapi.com/?i={}&plot=short&r=json".format(u.group(1).strip()))
+                resp = get_json(
+                    "http://www.omdbapi.com/?i={}&plot=short&r=json".format(url.group(1).strip()))
                 debug("%s", resp)
                 title = resp.get("Title")
                 if not resp.get("Response") == "True" or not title:
@@ -1001,18 +1019,21 @@ class XIMdbCommand(Command):
                 if sid:
                     sid = get_json("http://www.omdbapi.com/?i={}&plot=short&r=json".format(sid))
                     try:
-                        title = "{} S{:02}E{:02} - {}".format(sid.get("Title"), int(resp.get("Season", "0")), int(resp.get("Episode", "0")), title)
-                    except:
+                        title = "{} S{:02}E{:02} - {}".format(sid.get("Title"),
+                                                              int(resp.get("Season", "0")),
+                                                              int(resp.get("Episode", "0")),
+                                                              title)
+                    except Exception:
                         error("series")
                 year = resp.get("Year", "0 BC")
                 rating = resp.get("imdbRating", "0.0")
                 rated = resp.get("Rated", "?")
-                rt = resp.get("Runtime", "over 9000 mins")
+                runtime = resp.get("Runtime", "over 9000 mins")
                 plot = resp.get("Plot")
                 if not plot:
-                    self.post("{}\n{}, {}, {}, {}", title, year, rating, rated, rt)
+                    self.post("{}\n{}, {}, {}, {}", title, year, rating, rated, runtime)
                 else:
-                    self.post("{}\n{}, {}, {}, {}\n{}", title, year, rating, rated, rt, plot)
+                    self.post("{}\n{}, {}, {}, {}\n{}", title, year, rating, rated, runtime, plot)
             except Exception:
                 error("imdbed")
         return False
@@ -1074,9 +1095,10 @@ class ExifCommand(FileCommand):
         if not self.active:
             return False
 
-        u = file.url
-        ul = u.lower()
-        if not ul.endswith(".jpeg") and not ul.endswith(".jpe") and not ul.endswith(".jpg") and not ul.endswith(".png"):
+        url = file.url
+        urll = url.lower()
+        if (not urll.endswith(".jpeg") and not urll.endswith(".jpe") and
+                not urll.endswith(".jpg") and not urll.endswith(".png")):
             return False
         if file.size > 10 * 1024 * 1024:
             info("Ignoring %s because too large", file)
@@ -1086,14 +1108,18 @@ class ExifCommand(FileCommand):
             info("Ignoring %s because too old", file)
             return False
 
-        info("%s %s %d %d %d", file, u, file.size, file.time_left, ttldiff)
-        lat, lon, model = gps(r.get(u).content)
+        info("%s %s %d %d %d", file, url, file.size, file.time_left, ttldiff)
+        lat, lon, model = gps(r.get(url).content)
         maps = "https://www.google.com/maps?f=q&q=loc:{:.7},{:.7}&t=k&spn=0.5,0.5".format(lat, lon)
-        loc = get_json("http://maps.googleapis.com/maps/api/geocode/json?latlng={:.7},{:.7}&sensor=true&language=en".format(lat, lon))
+        loc = get_json(
+            "http://maps.googleapis.com/maps/api/geocode/json?"
+            "latlng={:.7},{:.7}&sensor=true&language=en".format(lat, lon))
         loc = {v.get("types")[0]: v.get("formatted_address") for v in loc["results"]}
         useloc = None
-        for x in ("street_address", "route", "postal_code", "administrative_area_level_3", "administrative_area_level_2", "locality", "administrative_level_1", "country"):
-            useloc = loc.get(x)
+        for i in ("street_address", "route", "postal_code",
+                  "administrative_area_level_3", "administrative_area_level_2",
+                  "locality", "administrative_level_1", "country"):
+            useloc = loc.get(i)
             if useloc:
                 break
         if not useloc:
@@ -1213,21 +1239,21 @@ def main():
                 if args.rooms:
                     rooms = list()
                     with open(args.rooms) as roomp:
-                        for l in roomp:
+                        for i in roomp:
                             try:
-                                l, dummy = l.split(" ", 1)
+                                i, dummy = i.split(" ", 1)
                             except Exception:
-                                error("Failed to parse line %s", l)
+                                error("Failed to parse line %s", i)
                                 continue
-                            if not l:
+                            if not i:
                                 continue
-                            rooms += l,
+                            rooms += i,
                     rooms = set(rooms)
                     if rooms:
-                        class obj:
+                        class Objectify:
                             def __init__(self, **kw):
                                 self.__dict__ = kw
-                        handler(obj(nick="RealDolos", rooms=rooms, msg=""))
+                        handler(Objectify(nick="RealDolos", rooms=rooms, msg=""))
                 room.listen(onmessage=handler, onfile=handler.__call_file__)
         except Exception:
             error("Died, respawning")
@@ -1269,6 +1295,8 @@ def override_socket(bind):
 
 if __name__ == "__main__":
     #override_socket("127.0.0.1")
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s: %(message)s',
+                        datefmt="%Y-%m-%d %H:%M:%S")
     logging.getLogger("requests").setLevel(logging.WARNING)
     sys.exit(main())
