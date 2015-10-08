@@ -232,6 +232,15 @@ class PhrasesUploadCommand(Command, PhraseCommand):
         self.post("{}: @{}", remainder or msg.nick, self.upload)
 
 
+class NiggersCommand(Command):
+    handlers = "!niggers"
+    def __call__(self, cmd, remainder, msg):
+        if not self.allowed(msg):
+            return false
+        self.post("{}, the following black gentlemen cannot use this bot: {}", msg.nick, ", ".join(BLACKFAGS))
+        return True
+
+
 class AphaCommand(Command):
     m = {"!auxo": "auxo", "!siri": "Siri", "!apha": "apha", "!merc": "MercWMouthAndOrDeadpoolAndOrFaggotAsswipe"}
     handlers = list(m.keys())
