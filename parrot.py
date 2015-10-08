@@ -257,7 +257,7 @@ class AphaCommand(Command):
         return True
 
 class DiscoverCommand(DBCommand, Command):
-    handlers = "!addroom", "!delroom", "!discover"
+    handlers = "!addroom", "!delroom", "!discover", "!room"
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -278,7 +278,7 @@ class DiscoverCommand(DBCommand, Command):
             try:
                 cur = conn.cursor()
                 rooms = cur.execute("SELECT room FROM rooms WHERE alive <> 2 "
-                                    "ORDER BY RANDOM() LIMIT 2").fetchall()
+                                    "ORDER BY RANDOM() LIMIT 5").fetchall()
                 for (room,) in rooms:
                     try:
                         title, users, files, disabled = self._stat(room)
@@ -302,7 +302,7 @@ class DiscoverCommand(DBCommand, Command):
                         error("Failed to stat room, %d", code)
             except Exception:
                 error("Failed to refresh rooms")
-            sleep(0.4 * 60)
+            sleep(60)
 
 
     def __call__(self, cmd, remainder, msg):
@@ -318,23 +318,40 @@ class DiscoverCommand(DBCommand, Command):
         if cmd == "!delroom":
             return self.del_room(msg)
 
+        limit = None
+        if cmd == "!room":
+            remainder = remainder.strip()
+            if not remainder:
+                return False
+            limit = remainder
+            remainder = None
         nick = remainder or msg.nick
 
-        self.post("{}: {}", nick, self.make(295 - len(nick)))
+        self.post("{}: {}", nick, self.make(295 - len(nick), limit))
         return True
 
-    @property
-    def rooms(self):
+    def get_rooms(self, limit=None):
+
         cur = self.conn.cursor()
-        rooms = sorted(cur.execute("SELECT room, title, users, files FROM rooms "
-                                   "WHERE alive = 1 AND room <> ?",
-                                   (self.room.name,)),
-                       key=lambda x: ((x[2] + 1) * log(max(2, x[3])), x[0]),
-                       reverse=True)
+        if limit:
+            rooms = sorted(cur.execute("SELECT room, title, users, files FROM rooms "
+                                       "WHERE alive = 1 AND room <> ? AND title LIKE ? COLLATE NOCASE",
+                                       (self.room.name, "%{}%".format(limit))),
+                           key=lambda x: ((x[2] + 1) * log(max(2, x[3])), x[0]),
+                           reverse=True)
+        else:
+            rooms = sorted(cur.execute("SELECT room, title, users, files FROM rooms "
+                                       "WHERE alive = 1 AND room <> ?",
+                                       (self.room.name,)),
+                           key=lambda x: ((x[2] + 1) * log(max(2, x[3])), x[0]),
+                           reverse=True)
         return rooms
 
-    def make(self, maxlen):
-        rooms = self.rooms
+    @property
+    def rooms(self): return self.get_rooms()
+
+    def make(self, maxlen, limit):
+        rooms = self.get_rooms(limit)
         result = []
         for room, title, users, files in rooms:
             cur = "#{} ({}/{})".format(room, users, files)
