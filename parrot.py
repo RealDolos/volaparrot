@@ -64,7 +64,7 @@ from path import path
 
 
 ADMINFAG = ["RealDolos"]
-BLACKFAGS = [i.casefold() for i in ("kalyx", "merc", "loliq", "annoying", "bot", "RootBeats")]
+BLACKFAGS = [i.casefold() for i in ("kalyx", "merc", "loliq", "annoying", "bot", "RootBeats", "JEW2FORU")]
 PARROTFAG = "Parrot"
 
 # pylint: disable=invalid-name
@@ -428,7 +428,7 @@ class DiscoverCommand(DBCommand, Command):
     def _stat(room):
         with Room(room) as remote:
             remote.listen(onusercount=lambda x: False)
-            return (remote.title, max(remote.user_count - 1, 0),
+            return (remote.title, max(remote.user_count, 0),
                     len(remote.files), remote.config.get("disabled"))
 
     def _refresh(self):
@@ -463,7 +463,7 @@ class DiscoverCommand(DBCommand, Command):
                         error("Failed to stat room, %d", code)
             except Exception:
                 error("Failed to refresh rooms")
-            sleep(60)
+            sleep(240)
 
 
     def __call__(self, cmd, remainder, msg):
@@ -499,13 +499,13 @@ class DiscoverCommand(DBCommand, Command):
                                        "WHERE alive = 1 AND room <> ? "
                                        "AND title LIKE ? COLLATE NOCASE",
                                        (self.room.name, "%{}%".format(limit))),
-                           key=lambda x: ((x[2] + 1) * log(max(2, x[3])), x[0]),
+                           key=lambda x: ((1000 if "cuck" in x[1] else 1) * (x[2] + 1) * log(max(2, x[3])), x[0]),
                            reverse=True)
         else:
             rooms = sorted(cur.execute("SELECT room, title, users, files FROM rooms "
                                        "WHERE alive = 1 AND room <> ?",
                                        (self.room.name,)),
-                           key=lambda x: ((x[2] + 1) * log(max(2, x[3])), x[0]),
+                           key=lambda x: ((1000 if "cuck" in x[1] else 1) * (x[2] + 1) * log(max(2, x[3])), x[0]),
                            reverse=True)
         return rooms
 
@@ -853,6 +853,45 @@ class EightballCommand(Command):
         self.post("{}: {}", msg.nick, random.choice(self.phrases))
         return True
 
+class RevolverCommand(Command):
+    handlers = "!roulette", "!volarette"
+
+    def __call__(self, cmd, remainder, msg):
+        if not self.allowed(msg):
+            return True
+        if msg.nick in ("Counselor", "Brisis"):
+            shoot = 6
+        else:
+            shoot = random.randint(1, 6)
+        self.room.post_chat("rolling...", is_me=True)
+        sleep(1)
+        if shoot == 6:
+            self.post("BANG, {} is dead", msg.nick)
+        else:
+            self.post("CLICK, {} is still foreveralone", msg.nick)
+        return True
+
+class DiceCommand(Command):
+    handlers = "!dice", "!roll"
+
+    def __call__(self, cmd, remainder, msg):
+        if not self.allowed(msg):
+            return True
+        many = 1
+        sides = 6
+        m = re.match(r"^(\d+)(?:d(\d+))$", remainder)
+        if not m and remainder:
+            return False
+        if m:
+            many = int(m.group(1)) or many
+            sides = int(m.group(2)) or sides
+        if sides <= 1:
+            return False
+        if many < 1 or many > 10:
+            return False
+        self.post("Rolled {}".format(sum(random.randint(1, sides) for _ in range(many))))
+        return True
+
 
 class XDanielCommand(Command):
     handlers = "!siberia", "!cyberia"
@@ -957,7 +996,9 @@ class XYoutuberCommand(Command):
                 desc = None
                 if desc:
                     desc = html.unescape(desc.group(1)).strip()
-                if duration and desc and msg.nick.lower() not in ("dongmaster", "doc"):
+                if "liquid" in msg.nick.lower():
+                    self.post("{}: YouNow links are not allowed, you pedo", msg.nick)
+                elif duration and desc and msg.nick.lower() not in ("dongmaster", "doc"):
                     self.post("YouTube: {} ({})\n{}", title, duration, desc)
                 elif duration:
                     self.post("YouTube: {} ({})", title, duration)
@@ -1162,7 +1203,7 @@ class ChatHandler:
         print(msg)
         if msg.nick == self.room.user.name:
             return
-        if any(i in msg.nick.casefold() for i in BLACKFAGS):
+        if any(i in msg.nick.casefold() for i in BLACKFAGS) and not msg.nick.casefold() == "MODChatBot".casefold():
             return
 
         cmd = msg.msg.split(" ", 1)
