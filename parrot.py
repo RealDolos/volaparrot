@@ -68,7 +68,7 @@ from path import path
 
 ADMINFAG = ["RealDolos"]
 BLACKFAGS = [i.casefold() for i in (
-    "kalyx", "merc", "loliq", "annoying", "bot", "RootBeats", "JEW2FORU")]
+    "kalyx", "merc", "loliq", "annoying", "bot", "RootBeats", "JEW2FORU", "counselor", "briseis")]
 PARROTFAG = "Parrot"
 
 # pylint: disable=invalid-name
@@ -1215,7 +1215,6 @@ class ExifCommand(FileCommand):
 
 
 class CurrentTimeCommand(PulseCommand):
-
     interval = 60.0
 
     def onpulse(self, current):
@@ -1261,7 +1260,7 @@ class ChatHandler:
              ", ".join(repr(h) for h in self.pulse_handlers))
 
     def __call__(self, msg):
-        print(msg)
+        info(msg)
         if msg.nick == self.room.user.name:
             return
         if any(i in msg.nick.casefold() for i in BLACKFAGS):
