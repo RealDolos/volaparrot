@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.4
+#!/usr/bin/env python3
 """
 The MIT License (MIT)
 Copyright © 2015 RealDolos
@@ -36,6 +36,7 @@ if sys.stderr.encoding.casefold() != "utf-8".casefold():
         sys.stderr.buffer, 'replace')
 
 
+import asyncio
 import html
 import inspect
 import logging
@@ -49,22 +50,25 @@ from functools import partial, lru_cache
 from io import BytesIO
 from math import log10 as log
 from statistics import mean, median, stdev
-from threading import Thread
 from time import sleep, time
+from types import MethodType
 from uuid import uuid4
 
 import exifread
 # pylint: disable=import-error
 import isodate
 # pylint: enable=import-error
+import volapi.volapi as volapi_internal
 
 from volapi import Room
+from volapi.arbritrator import call_sync, ARBITRATOR
 from requests import Session
 from path import path
 
 
 ADMINFAG = ["RealDolos"]
-BLACKFAGS = [i.casefold() for i in ("kalyx", "merc", "loliq", "annoying", "bot", "RootBeats", "JEW2FORU")]
+BLACKFAGS = [i.casefold() for i in (
+    "kalyx", "merc", "loliq", "annoying", "bot", "RootBeats", "JEW2FORU")]
 PARROTFAG = "Parrot"
 
 # pylint: disable=invalid-name
@@ -112,6 +116,29 @@ def gps(src):
             "{} {}".format(exif.get("Image Make", "Unknown"),
                            exif.get("Image Model", "Unknown")))
 
+@call_sync
+def pulse(self, room, interval=0.2):
+    debug("pulse for %s is a go!", repr(room))
+
+    @asyncio.coroutine
+    def looper():
+        info("looping %s %s", repr(room), repr(interval))
+        while True:
+            nextsleep = asyncio.sleep(interval)
+            try:
+                if room.connected and room.conn:
+                    room.conn.enqueue_data("pulse", time())
+                    room.conn.process_queues()
+                    if room.connected:
+                        yield from nextsleep
+            except Exception:
+                error("Failed to enqueue pulse")
+
+    asyncio.async(looper(), loop=self.loop)
+
+volapi_internal.EVENT_TYPES += "pulse",
+ARBITRATOR.start_pulse = MethodType(pulse, ARBITRATOR)
+
 
 class Command:
     active = True
@@ -147,8 +174,30 @@ class Command:
     def allowed(self, msg):
         return not self.greens or msg.logged_in
 
+
 class FileCommand(Command):
-    pass
+    def __call__(self, cmd, remainder, msg):
+        return False
+
+
+class PulseCommand(Command):
+    interval = 0
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.last_interval = 0
+        if self.interval <= 0:
+            raise RuntimeError("No valid interval")
+
+    def __call__(self, cmd, remainder, msg):
+        return False
+
+    def check_interval(self, current, interval=1.0):
+        result = current >= self.last_interval + interval
+        if result:
+            self.last_interval = current
+        return result
+
 
 def _init_conn():
     conn = sqlite3.connect("phrases2.db")
@@ -419,52 +468,15 @@ class UploadDownloadCommand(DBCommand, Command):
 class DiscoverCommand(DBCommand, Command):
     handlers = "!addroom", "!delroom", "!discover", "!room"
 
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-        self._thread = Thread(target=self._refresh, daemon=True)
-        self._thread.start()
-
     @staticmethod
     def _stat(room):
-        with Room(room) as remote:
+        with Room(room, "letest") as remote:
             remote.listen(onusercount=lambda x: False)
             return (remote.title, max(remote.user_count, 0),
                     len(remote.files), remote.config.get("disabled"))
 
-    def _refresh(self):
-        conn = _init_conn()
-
-        while True:
-            info("refreshing")
-            try:
-                cur = conn.cursor()
-                rooms = cur.execute("SELECT room FROM rooms WHERE alive <> 2 "
-                                    "ORDER BY RANDOM() LIMIT 5").fetchall()
-                for (room,) in rooms:
-                    try:
-                        title, users, files, disabled = self._stat(room)
-                        if disabled:
-                            warning("Killing disabled room")
-                            cur.execute("DELETE FROM rooms WHERE room = ?", (room,))
-                        else:
-                            info("Updated %s %s", room, title)
-                            cur.execute("UPDATE rooms set title = ?, users = ?, files = ?, "
-                                        "alive = 1 "
-                                        "WHERE room = ?",
-                                        (title, users, files, room))
-                    except Exception as ex:
-                        code = 0
-                        cause = (ex and ex.__cause__) or (ex and ex.__context__) or None
-                        if cause and "404" in str(cause):
-                            code = 2
-                        cur.execute("UPDATE rooms SET alive = ? "
-                                    "WHERE room = ?",
-                                    (code, room,))
-                        error("Failed to stat room, %d", code)
-            except Exception:
-                error("Failed to refresh rooms")
-            sleep(240)
-
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
 
     def __call__(self, cmd, remainder, msg):
         if cmd == "!addroom":
@@ -492,6 +504,8 @@ class DiscoverCommand(DBCommand, Command):
         return True
 
     def get_rooms(self, limit=None):
+        def keyfn(room):
+            return ("cuck" in room[1] and 1000 or 1) * (room[2] + 1) * log(max(2, room[3])), room[0]
 
         cur = self.conn.cursor()
         if limit:
@@ -499,14 +513,12 @@ class DiscoverCommand(DBCommand, Command):
                                        "WHERE alive = 1 AND room <> ? "
                                        "AND title LIKE ? COLLATE NOCASE",
                                        (self.room.name, "%{}%".format(limit))),
-                           key=lambda x: ((1000 if "cuck" in x[1] else 1) * (x[2] + 1) * log(max(2, x[3])), x[0]),
-                           reverse=True)
+                           key=keyfn, reverse=True)
         else:
             rooms = sorted(cur.execute("SELECT room, title, users, files FROM rooms "
                                        "WHERE alive = 1 AND room <> ?",
                                        (self.room.name,)),
-                           key=lambda x: ((1000 if "cuck" in x[1] else 1) * (x[2] + 1) * log(max(2, x[3])), x[0]),
-                           reverse=True)
+                           key=keyfn, reverse=True)
         return rooms
 
     @property
@@ -531,8 +543,7 @@ class DiscoverCommand(DBCommand, Command):
             return True
 
         rooms = list(msg.rooms.keys())
-        thread = Thread(target=partial(self._add_rooms, rooms, self.rooms), daemon=True)
-        thread.start()
+        self._add_rooms(rooms, self.rooms)
         return True
 
     def _add_rooms(self, rooms, known):
@@ -581,12 +592,46 @@ class DiscoverCommand(DBCommand, Command):
         self.post("{}: Nuked that room", msg.nick)
         return True
 
-class MoarDiscoverCommand(DiscoverCommand):
+class MoarDiscoverCommand(DiscoverCommand, PulseCommand):
     dirty = True
     fid = 0
 
+    interval = 240
+
     def handles(self, cmd):
         return bool(cmd)
+
+    def onpulse(self, current):
+        info("refreshing")
+        try:
+            cur = self.conn.cursor()
+            rooms = cur.execute("SELECT room FROM rooms WHERE alive <> 2 "
+                                "ORDER BY RANDOM() LIMIT 5").fetchall()
+            for (room,) in rooms:
+                try:
+                    title, users, files, disabled = self._stat(room)
+                    if disabled:
+                        warning("Killing disabled room")
+                        cur.execute("DELETE FROM rooms WHERE room = ?", (room,))
+                    else:
+                        info("Updated %s %s", room, title)
+                        cur.execute("UPDATE rooms set title = ?, users = ?, files = ?, "
+                                    "alive = 1 "
+                                    "WHERE room = ?",
+                                    (title, users, files, room))
+                except Exception as ex:
+                    code = 0
+                    cause = (ex and ex.__cause__) or (ex and ex.__context__) or None
+                    if cause and "404" in str(cause):
+                        code = 2
+                    cur.execute("UPDATE rooms SET alive = ? "
+                                "WHERE room = ?",
+                                (code, room,))
+                    error("Failed to stat room, %d", code)
+        except Exception:
+            error("Failed to refresh rooms")
+        finally:
+            info("done refreshing")
 
     def __call__(self, cmd, remainder, msg):
         if cmd == "!fulldiscover":
@@ -871,6 +916,7 @@ class RevolverCommand(Command):
             self.post("CLICK, {} is still foreveralone", msg.nick)
         return True
 
+
 class DiceCommand(Command):
     handlers = "!dice", "!roll"
 
@@ -879,12 +925,12 @@ class DiceCommand(Command):
             return True
         many = 1
         sides = 6
-        m = re.match(r"^(\d+)(?:d(\d+))$", remainder)
-        if not m and remainder:
+        match = re.match(r"^(\d+)(?:d(\d+))$", remainder)
+        if not match and remainder:
             return False
-        if m:
-            many = int(m.group(1)) or many
-            sides = int(m.group(2)) or sides
+        if match:
+            many = int(match.group(1)) or many
+            sides = int(match.group(2)) or sides
         if sides <= 1:
             return False
         if many < 1 or many > 10:
@@ -1132,7 +1178,7 @@ class CheckModCommand(Command):
 
 class ExifCommand(FileCommand):
 
-    def __call__(self, file):
+    def onfile(self, file):
         if not self.active:
             return False
 
@@ -1168,14 +1214,24 @@ class ExifCommand(FileCommand):
         self.post("@{} {}\nGPS: {}\nModel: {}", file.id, useloc, maps, model)
 
 
+class CurrentTimeCommand(PulseCommand):
+
+    interval = 60.0
+
+    def onpulse(self, current):
+        info("got pulsed %.2f", current)
+
+
 class ChatHandler:
     def __init__(self, room, args):
         self.room = room
         handlers = list()
         file_handlers = list()
+        pulse_handlers = list()
         for cand in globals().values():
             if not inspect.isclass(cand) or not issubclass(cand, Command) \
                     or cand is Command:
+                #info("no dice: %s", repr(cand))
                 continue
             if args.noparrot and issubclass(cand, PhraseCommand):
                 continue
@@ -1184,26 +1240,31 @@ class ChatHandler:
             if not args.exif and cand is ExifCommand:
                 continue
             try:
-                if cand is FileCommand or cand is Command:
+                if cand is PulseCommand or cand is FileCommand or cand is Command:
                     continue
+                inst = cand(room, args.admins)
+                handlers += inst,
                 if issubclass(cand, FileCommand):
-                    file_handlers += cand(room, args.admins),
-                else:
-                    handlers += cand(room, args.admins),
+                    file_handlers += inst,
+                if issubclass(cand, PulseCommand):
+                    pulse_handlers += inst,
             except Exception:
                 error("Failed to initialize handler %s", str(cand))
         self.handlers = sorted(handlers, key=repr)
         self.file_handlers = sorted(file_handlers, key=repr)
+        self.pulse_handlers = sorted(pulse_handlers, key=repr)
         info("Initialized handlers %s",
              ", ".join(repr(h) for h in self.handlers))
         info("Initialized file handlers %s",
              ", ".join(repr(h) for h in self.file_handlers))
+        info("Initialized pulse handlers %s",
+             ", ".join(repr(h) for h in self.pulse_handlers))
 
     def __call__(self, msg):
         print(msg)
         if msg.nick == self.room.user.name:
             return
-        if any(i in msg.nick.casefold() for i in BLACKFAGS) and not msg.nick.casefold() == "MODChatBot".casefold():
+        if any(i in msg.nick.casefold() for i in BLACKFAGS):
             return
 
         cmd = msg.msg.split(" ", 1)
@@ -1222,11 +1283,23 @@ class ChatHandler:
     def __call_file__(self, file):
         for handler in self.file_handlers:
             try:
-                if handler(file):
+                if handler.onfile(file):
                     return
             except Exception:
                 error("Failed to procss command %s with handler %s",
                       file, repr(handler))
+
+    def __call_pulse__(self, current):
+        debug("got a pulse: %d", current)
+        for handler in self.pulse_handlers:
+            try:
+                if not handler.check_interval(current, handler.interval):
+                    continue
+                if handler.onpulse(current):
+                    return
+            except Exception:
+                error("Failed to procss command %s with handler %s",
+                      time, repr(handler))
 
 
 def main():
@@ -1295,7 +1368,18 @@ def main():
                             def __init__(self, **kw):
                                 self.__dict__ = kw
                         handler(Objectify(nick="RealDolos", rooms=rooms, msg=""))
-                room.listen(onmessage=handler, onfile=handler.__call_file__)
+                if handler.handlers:
+                    room.add_listener("chat", handler)
+                if handler.file_handlers:
+                    room.add_listener("file", handler.__call_file__)
+                if handler.pulse_handlers:
+                    mininterval = min(h.interval for h in handler.pulse_handlers)
+                    room.add_listener("pulse", handler.__call_pulse__)
+                    ARBITRATOR.start_pulse(room, mininterval)
+                    info("installed pulse with interval %f", mininterval)
+                info("listening...")
+                room.listen()
+
         except Exception:
             error("Died, respawning")
             sys.exit(1)
@@ -1336,8 +1420,9 @@ def override_socket(bind):
 
 if __name__ == "__main__":
     #override_socket("127.0.0.1")
-    logging.basicConfig(level=logging.DEBUG,
-                        format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s: %(message)s',
-                        datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s.%(msecs)03d %(threadName)s %(levelname)s %(module)s: %(message)s',
+        datefmt="%Y-%m-%d %H:%M:%S")
     logging.getLogger("requests").setLevel(logging.WARNING)
     sys.exit(main())
