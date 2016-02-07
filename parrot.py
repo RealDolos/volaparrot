@@ -505,7 +505,7 @@ class DiscoverCommand(DBCommand, Command):
 
     def get_rooms(self, limit=None):
         def keyfn(room):
-            return ("cuck" in room[1] and 1000 or 1) * (room[2] + 1) * log(max(2, room[3])), room[0]
+            return (room[2] + 1) * log(max(2, room[3])), room[0]
 
         cur = self.conn.cursor()
         if limit:
