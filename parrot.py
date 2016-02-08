@@ -1418,10 +1418,49 @@ def override_socket(bind):
 
 
 if __name__ == "__main__":
+    def debug_handler(sig, frame):
+        import sys
+        import code
+        import traceback
+
+        def printall():
+            print("\n*** STACKTRACE - START ***\n", file=sys.stderr)
+            code = []
+            for threadId, stack in sys._current_frames().items():
+                code.append("\n# ThreadID: %s" % threadId)
+                for filename, lineno, name, line in traceback.extract_stack(stack):
+                    code.append('File: "%s", line %d, in %s' % (filename,
+                                                                lineno, name))
+                    if line:
+                        code.append("  %s" % (line.strip()))
+
+            for line in code:
+                print(line, file=sys.stderr)
+            print("\n*** STACKTRACE - END ***\n", sys.stderr())
+        d = {
+            "_frame": frame,
+            "printall": printall
+            }
+        d.update(frame.f_globals)
+        d.update(frame.f_locals)
+
+        i = code.InteractiveConsole(d)
+        message  = "Signal received : entering python shell.\nTraceback:\n"
+        message += ''.join(traceback.format_stack(frame))
+        i.interact(message)
+
+
+
     #override_socket("127.0.0.1")
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s.%(msecs)03d %(threadName)s %(levelname)s %(module)s: %(message)s',
         datefmt="%Y-%m-%d %H:%M:%S")
     logging.getLogger("requests").setLevel(logging.WARNING)
+
+    try:
+        import signal
+        signal.signal(signal.SIGUSR2, debug_handler)
+    except:
+        error("failed to setup debugging")
     sys.exit(main())
