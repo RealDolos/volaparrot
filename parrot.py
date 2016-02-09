@@ -1436,10 +1436,15 @@ if __name__ == "__main__":
 
             for line in code:
                 print(line, file=sys.stderr)
-            print("\n*** STACKTRACE - END ***\n", sys.stderr())
+            print("\n*** STACKTRACE - END ***\n", file=sys.stderr)
+
+        def exit(num=1):
+            sys.exit(1)
+
         d = {
             "_frame": frame,
-            "printall": printall
+            "printall": printall,
+            "exit": exit
             }
         d.update(frame.f_globals)
         d.update(frame.f_locals)
