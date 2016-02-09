@@ -65,6 +65,8 @@ from volapi.arbritrator import call_sync, ARBITRATOR
 from requests import Session
 from path import path
 
+from roomstat import roomstat
+
 
 ADMINFAG = ["RealDolos"]
 BLACKFAGS = [i.casefold() for i in (
@@ -559,7 +561,7 @@ class DiscoverCommand(DBCommand, Command):
 
         try:
             info("Stating %s", room)
-            title, users, files, disabled = self._stat(room)
+            title, users, files, disabled = roomstat(room)
             if disabled:
                 return False
         except Exception:
@@ -609,7 +611,7 @@ class MoarDiscoverCommand(DiscoverCommand, PulseCommand):
                                 "ORDER BY RANDOM() LIMIT 5").fetchall()
             for (room,) in rooms:
                 try:
-                    title, users, files, disabled = self._stat(room)
+                    title, users, files, disabled = roomstat(room)
                     if disabled:
                         warning("Killing disabled room")
                         cur.execute("DELETE FROM rooms WHERE room = ?", (room,))
