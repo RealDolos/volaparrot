@@ -70,7 +70,9 @@ from roomstat import roomstat
 
 ADMINFAG = ["RealDolos"]
 BLACKFAGS = [i.casefold() for i in (
-    "kalyx", "merc", "loliq", "annoying", "bot", "RootBeats", "JEW2FORU", "counselor", "briseis")]
+    "kalyx", "merc", "loliq", "annoying", "bot", "RootBeats", "JEW2FORU")]
+OBAMAS = [i.casefold() for i in (
+    "counselor", "briseis")]
 PARROTFAG = "Parrot"
 
 # pylint: disable=invalid-name
@@ -319,6 +321,17 @@ class NiggersCommand(Command):
             return False
         self.post("{}, the following black gentlemen cannot use this bot: {}",
                   msg.nick, ", ".join(BLACKFAGS))
+        return True
+
+
+class ObamasCommand(Command):
+    handlers = "!obamas"
+    def __call__(self, cmd, remainder, msg):
+        if not self.allowed(msg):
+            return False
+        self.post("{}, the following half-black gentlemen can only use this bot "
+                  "once every couple of minutes: {}",
+                  msg.nick, ", ".join(OBAMAS))
         return True
 
 
@@ -1250,6 +1263,8 @@ class CurrentTimeCommand(PulseCommand):
 class ChatHandler:
     def __init__(self, room, args):
         self.room = room
+        self.obamas = dict()
+
         handlers = list()
         file_handlers = list()
         pulse_handlers = list()
@@ -1289,7 +1304,12 @@ class ChatHandler:
         info(msg)
         if msg.nick == self.room.user.name:
             return
-        if any(i in msg.nick.casefold() for i in BLACKFAGS):
+        lnick = msg.nick.casefold()
+        if any(i in lnick for i in BLACKFAGS):
+            return
+        isObama = any(i in lnick for i in OBAMAS)
+        if isObama and self.obamas.get(lnick, 0) + 600 > time():
+            info("Ignored Obama %s", lnick)
             return
 
         cmd = msg.msg.split(" ", 1)
@@ -1300,6 +1320,8 @@ class ChatHandler:
         for handler in self.handlers:
             try:
                 if handler.handles(cmd) and handler(cmd, remainder, msg):
+                    if isObama:
+                        self.obamas[lnick] = time()
                     return
             except Exception:
                 error("Failed to procss command %s with handler %s",
