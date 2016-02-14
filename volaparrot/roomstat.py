@@ -28,6 +28,9 @@ import json
 import sys
 
 
+__all__ = ["roomstat"]
+
+
 def _roomstat(room):
     from volapi import Room
     with Room(room, "letest") as remote:
@@ -38,7 +41,8 @@ def _roomstat(room):
 def roomstat(room):
     import subprocess
     cmd = (sys.executable, __file__, room)
-    result = json.loads(subprocess.check_output(cmd, timeout=3).decode())
+    result = subprocess.check_output(cmd, timeout=3).decode()
+    result = json.loads(result)
     if isinstance(result, dict) and "message" in result:
         raise IOError("Failed to stat room: {} {}".format(result["type"], result["message"]))
     return result
