@@ -50,7 +50,7 @@ from functools import partial, lru_cache
 from io import BytesIO
 from math import log10 as log
 from statistics import mean, median, stdev
-from time import sleep, time
+from time import time
 from types import MethodType
 from uuid import uuid4
 
@@ -61,7 +61,7 @@ import isodate
 import volapi.volapi as volapi_internal
 
 from volapi import Room
-from volapi.arbritrator import call_sync, ARBITRATOR
+from volapi.arbritrator import call_async, call_sync, ARBITRATOR
 from requests import Session
 from path import path
 
@@ -138,8 +138,22 @@ def pulse(self, room, interval=0.2):
 
     asyncio.async(looper(), loop=self.loop)
 
-volapi_internal.EVENT_TYPES += "pulse",
+@call_async
+def _call_later(self, room, delay, callback, *args, **kw):
+    if not callback:
+        return
+
+    def insert():
+        if room.connected and room.conn:
+            room.conn.enqueue_data("call", [callback, args, kw])
+            room.conn.process_queues()
+
+    info("call later scheduled %r %r %r", room, delay, callback)
+    self.loop.call_later(delay, insert)
+
+volapi_internal.EVENT_TYPES += "pulse", "call",
 ARBITRATOR.start_pulse = MethodType(pulse, ARBITRATOR)
+ARBITRATOR.call_later = MethodType(_call_later, ARBITRATOR)
 
 
 class Command:
@@ -175,6 +189,9 @@ class Command:
 
     def allowed(self, msg):
         return not self.greens or msg.logged_in
+
+    def call_later(self, delay, callback, *args, **kw):
+        ARBITRATOR.call_later(self.room, delay, callback, *args, **kw)
 
 
 class FileCommand(Command):
@@ -292,6 +309,7 @@ class PhrasesUploadCommand(Command, PhraseCommand):
                                                         upload_as="phrases.txt")
                 self.uploaded = time()
         self.post("{}: @{}", remainder or msg.nick, self.upload)
+        return True
 
 
 class NiggersCommand(Command):
@@ -900,22 +918,27 @@ class EightballCommand(Command):
         self.post("{}: {}", msg.nick, random.choice(self.phrases))
         return True
 
+
 class RevolverCommand(Command):
     handlers = "!roulette", "!volarette"
 
     def __call__(self, cmd, remainder, msg):
         if not self.allowed(msg):
             return True
+        if not self.active:
+            info("Not rolling")
+            return
         if msg.nick in ("Counselor", "Brisis"):
             shoot = 6
         else:
             shoot = random.randint(1, 6)
-        self.room.post_chat("rolling...", is_me=True)
-        sleep(1)
+        self.call_later(1, self.room.post_chat, "loading...", is_me=True)
+        self.call_later(4, self.room.post_chat, "spinning...", is_me=True)
+        self.call_later(7, self.room.post_chat, "cocking...", is_me=True)
         if shoot == 6:
-            self.post("BANG, {} is dead", msg.nick)
+            self.call_later(8, self.post, "BANG, {} is dead", msg.nick)
         else:
-            self.post("CLICK, {} is still foreveralone", msg.nick)
+            self.call_later(8, self.post, "CLICK, {} is still foreveralone", msg.nick)
         return True
 
 
@@ -950,6 +973,7 @@ class XDanielCommand(Command):
                   "free APKs for everybody, {}'s friend",
                   nick, self.nonotify("kALyX"))
         return True
+
 
 class XResponderCommand(PhraseCommand, Command):
     def handles(self, cmd):
@@ -1220,7 +1244,7 @@ class CurrentTimeCommand(PulseCommand):
     interval = 60.0
 
     def onpulse(self, current):
-        info("got pulsed %.2f", current)
+        info("%r: got pulsed %.2f", self.room, current)
 
 
 class ChatHandler:
@@ -1302,6 +1326,14 @@ class ChatHandler:
                 error("Failed to procss command %s with handler %s",
                       time, repr(handler))
 
+    def __call_call__(self, item):
+        callback, args, kw = item
+        try:
+            callback(*args, **kw)
+        except Exception:
+            error("Failed to process callback with %r (%r, **%r)",
+                callback, args, kw)
+
 
 def main():
     import argparse
@@ -1378,6 +1410,7 @@ def main():
                     room.add_listener("pulse", handler.__call_pulse__)
                     ARBITRATOR.start_pulse(room, mininterval)
                     info("installed pulse with interval %f", mininterval)
+                room.add_listener("call", handler.__call_call__)
                 info("listening...")
                 room.listen()
 
@@ -1421,15 +1454,14 @@ def override_socket(bind):
 
 if __name__ == "__main__":
     def debug_handler(sig, frame):
-        import sys
         import code
         import traceback
 
         def printall():
             print("\n*** STACKTRACE - START ***\n", file=sys.stderr)
             code = []
-            for threadId, stack in sys._current_frames().items():
-                code.append("\n# ThreadID: %s" % threadId)
+            for threadid, stack in sys._current_frames().items():
+                code.append("\n# ThreadID: %s" % threadid)
                 for filename, lineno, name, line in traceback.extract_stack(stack):
                     code.append('File: "%s", line %d, in %s' % (filename,
                                                                 lineno, name))
@@ -1440,22 +1472,21 @@ if __name__ == "__main__":
                 print(line, file=sys.stderr)
             print("\n*** STACKTRACE - END ***\n", file=sys.stderr)
 
-        def exit(num=1):
-            sys.exit(1)
+        def _exit(num=1):
+            sys.exit(num)
 
-        d = {
+        env = {
             "_frame": frame,
             "printall": printall,
-            "exit": exit
+            "exit": _exit
             }
-        d.update(frame.f_globals)
-        d.update(frame.f_locals)
+        env.update(frame.f_globals)
+        env.update(frame.f_locals)
 
-        i = code.InteractiveConsole(d)
-        message  = "Signal received : entering python shell.\nTraceback:\n"
+        shell = code.InteractiveConsole(env)
+        message = "Signal received : entering python shell.\nTraceback:\n"
         message += ''.join(traceback.format_stack(frame))
-        i.interact(message)
-
+        shell.interact(message)
 
 
     #override_socket("127.0.0.1")
@@ -1468,6 +1499,7 @@ if __name__ == "__main__":
     try:
         import signal
         signal.signal(signal.SIGUSR2, debug_handler)
-    except:
+    except Exception:
         error("failed to setup debugging")
+
     sys.exit(main())
