@@ -36,6 +36,7 @@ __all__ = ["NiggersCommand", "ObamasCommand", "CheckModCommand"]
 
 logger = logging.getLogger(__name__)
 
+
 class NiggersCommand(Command):
     handlers = "!niggers"
     def __call__(self, cmd, remainder, msg):
@@ -63,7 +64,7 @@ class CheckModCommand(Command):
     def __call__(self, cmd, remainder, msg):
         remainder = remainder.strip()
         user = remainder if remainder and " " not in remainder else "MercWMouth"
-        logger.info("Getting user %s", user)
+        logger.debug("Getting user %s", user)
         try:
             text, exp = get_text("https://volafile.io/user/{}".format(user))
             if time() - exp > 120:

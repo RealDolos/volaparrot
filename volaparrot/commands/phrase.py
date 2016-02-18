@@ -62,7 +62,7 @@ class PhraseCommand(DBCommand):
         cur.execute("INSERT OR REPLACE INTO phrases VALUES(?, ?, ?, ?)",
                     (phrase.casefold(), text, 1 if locked else 0, owner))
         PhraseCommand.changed = time()
-        logger.info("changed %d", self.changed)
+        logger.debug("changed %d", self.changed)
 
     def unlock_phrase(self, phrase):
         cur = self.conn.cursor()
@@ -132,7 +132,7 @@ class PhrasesUploadCommand(Command, PhraseCommand):
         if valid:
             valid = {f.id: f for f in self.room.files}.get(valid)
             valid = valid and not valid.expired
-        logger.info("valid %s %d %d", valid, self.uploaded, PhraseCommand.changed)
+        logger.debug("valid %s %d %d", valid, self.uploaded, PhraseCommand.changed)
         if not self.upload or self.uploaded < PhraseCommand.changed:
             cur = self.conn.cursor()
             phrases = "\r\n".join("{}|{}".format(*row)

@@ -131,7 +131,7 @@ def setup_room(room, args):
         mininterval = min(h.interval for h in handler.pulse_handlers)
         room.add_listener("pulse", handler.__call_pulse__)
         ARBITRATOR.start_pulse(room, mininterval)
-        logger.info("installed pulse with interval %f", mininterval)
+        logger.debug("installed pulse with interval %f", mininterval)
     room.add_listener("call", handler.__call_call__)
 
 

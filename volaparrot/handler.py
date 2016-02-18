@@ -70,11 +70,11 @@ class ChatHandler:
         self.handlers = sorted(handlers, key=repr)
         self.file_handlers = sorted(file_handlers, key=repr)
         self.pulse_handlers = sorted(pulse_handlers, key=repr)
-        logger.info("Initialized handlers %s",
+        logger.debug("Initialized handlers %s",
              ", ".join(repr(h) for h in self.handlers))
-        logger.info("Initialized file handlers %s",
+        logger.debug("Initialized file handlers %s",
              ", ".join(repr(h) for h in self.file_handlers))
-        logger.info("Initialized pulse handlers %s",
+        logger.debug("Initialized pulse handlers %s",
              ", ".join(repr(h) for h in self.pulse_handlers))
 
     def __call__(self, msg):

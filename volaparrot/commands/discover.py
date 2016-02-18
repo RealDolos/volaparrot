@@ -130,7 +130,7 @@ class DiscoverCommand(DBCommand, Command):
         if room.startswith("#"):
             room = room[1:]
         if room in list(r[0] for r in known):
-            logger.info("Room %s already known", room)
+            logger.debug("Room %s already known", room)
             return False
 
         try:
@@ -184,7 +184,7 @@ class MoarDiscoverCommand(DiscoverCommand, PulseCommand):
             return
         MoarDiscoverCommand.last_check = time()
 
-        logger.info("refreshing")
+        logger.debug("refreshing")
         try:
             cur = self.conn.cursor()
             rooms = cur.execute("SELECT room FROM rooms WHERE alive <> 2 "
@@ -213,7 +213,7 @@ class MoarDiscoverCommand(DiscoverCommand, PulseCommand):
         except Exception:
             logger.exception("Failed to refresh rooms")
         finally:
-            logger.info("done refreshing")
+            logger.debug("done refreshing")
 
     def __call__(self, cmd, remainder, msg):
         if cmd == "!fulldiscover":

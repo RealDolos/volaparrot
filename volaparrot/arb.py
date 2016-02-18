@@ -45,7 +45,7 @@ def pulse(self, room, interval=0.2):
 
     @asyncio.coroutine
     def looper():
-        logger.info("looping %s %s", repr(room), repr(interval))
+        logger.debug("looping %s %s", repr(room), repr(interval))
         while True:
             nextsleep = asyncio.sleep(interval)
             try:
@@ -69,7 +69,7 @@ def _call_later(self, room, delay, callback, *args, **kw):
             room.conn.enqueue_data("call", [callback, args, kw])
             room.conn.process_queues()
 
-    logger.info("call later scheduled %r %r %r", room, delay, callback)
+    logger.debug("call later scheduled %r %r %r", room, delay, callback)
     self.loop.call_later(delay, insert)
 
 volapi_internal.EVENT_TYPES += "pulse", "call",
