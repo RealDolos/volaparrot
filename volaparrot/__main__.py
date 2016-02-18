@@ -114,7 +114,7 @@ def parse_args():
                         help="Greenfag yerself")
     parser.add_argument("--no-parrot", dest="noparrot", action="store_true")
     parser.add_argument("--uploads", dest="uploads", action="store_true")
-    parser.add_argument("--exif", dest="uploads", action="store_true")
+    parser.add_argument("--exif", dest="exif", action="store_true")
     parser.add_argument("--debug", dest="debug", action="store_true")
     parser.add_argument("--rooms", dest="feedrooms", type=str, default=None)
     parser.add_argument("--bind", dest="bind", type=str, default=config("bind"))
