@@ -26,6 +26,8 @@ THE SOFTWARE.
 import logging
 
 from collections import namedtuple
+from io import BytesIO
+from time import time
 from uuid import uuid4
 
 from path import path
@@ -43,6 +45,9 @@ logger = logging.getLogger(__name__)
 class UploadDownloadCommand(DBCommand, Command):
     file = namedtuple("File", ["phrase", "id", "name", "locked", "owner"])
     workingset = dict()
+    changed = 0
+    uploaded = 0
+    upload = None
 
     @staticmethod
     def to_file(data):
@@ -74,6 +79,8 @@ class UploadDownloadCommand(DBCommand, Command):
             cur.execute("INSERT OR REPLACE INTO files (phrase, id, name, locked, owner) "
                         "VALUES(?, ?, ?, ?, ?)",
                         (phrase, newid, name, locked, owner))
+            UploadDownloadCommand.changed = time()
+            logger.debug("changed %d", self.changed)
         except Exception:
             logger.exception("Failed to add file")
             try:
@@ -102,7 +109,7 @@ class UploadDownloadCommand(DBCommand, Command):
             except Exception:
                 logger.exception("Failed to delete %s", file)
 
-    handlers = "!upload", "!download", "!delfile", "!unlockfile"
+    handlers = "!upload", "!download", "!delfile", "!unlockfile", "!files"
 
     def __call__(self, cmd, remainder, msg):
         meth = getattr(self, "cmd_{}".format(cmd[1:]), None)
@@ -184,6 +191,24 @@ class UploadDownloadCommand(DBCommand, Command):
         self.unlock_file(remainder)
         return True
 
-
-
-
+    def cmd_files(self, remainder, msg):
+        if not self.allowed(msg):
+            return False
+        valid = self.upload
+        if valid:
+            valid = {f.id: f for f in self.room.files}.get(valid)
+            valid = valid and not valid.expired
+        logger.debug("valid %s %d", valid, self.uploaded)
+        if not self.upload or self.uploaded < self.changed:
+            cur = self.conn.cursor()
+            phrases = "\r\n".join("{}|{}".format(*row)
+                                  for row in cur.execute("SELECT phrase, name "
+                                                         "FROM files "
+                                                         "ORDER BY phrase"))
+            with BytesIO(bytes(phrases, "utf-8")) as upload:
+                if self.active:
+                    self.upload = self.room.upload_file(upload,
+                                                        upload_as="files.txt")
+                self.uploaded = time()
+        self.post("{}: @{}", remainder or msg.nick, self.upload)
+        return True
