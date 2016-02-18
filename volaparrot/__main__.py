@@ -40,27 +40,68 @@ import logging
 
 from contextlib import ExitStack
 
-
+from path import path
 from volapi import Room, listen_many
 
 from .constants import *
+from ._version import *
 from .arb import ARBITRATOR
 from .handler import ChatHandler
 from .commands import Command
 
 
 # pylint: disable=invalid-name
-logger = logging.getLogger("parrot")
+logger = logging.getLogger("volaparrot.parrot")
 # pylint: enable=invalid-name
+
+class Config:
+    home = dict()
+    curr = dict()
+
+    def __init__(self, name):
+        try:
+            self.home = self.init_one(path("~/.{}.conf".format(name)).expand(), name)
+        except Exception:
+            pass
+        try:
+            self.curr = self.init_one(path("./.{}.conf".format(name)).expand(), name)
+        except Exception:
+            pass
+
+    def init_one(self, loc, sec):
+        from configparser import ConfigParser
+        config = ConfigParser()
+        config.read(loc)
+        return config[sec]
+
+    def __call__(self, key, default=None, split=None, type=None):
+        rv = self.curr.get(key, self.home.get(key, default))
+        if rv is None:
+            return rv
+        if split:
+            if type:
+                rv = [type(i) for i in rv.split(split)]
+            else:
+                rv = rv.split(split)
+            return rv
+        elif type:
+            return type(rv)
+        return rv
+
 
 def parse_args():
     import argparse
-    parser = argparse.ArgumentParser()
+
+    config = Config("parrot")
+    parser = argparse.ArgumentParser(
+        description=__fulltitle__,
+        epilog="If you feel the need to use this program, please get your head checked ASAP! "
+               "You might have brain cancer!")
     parser.add_argument("--parrot", "-p",
-                        type=str, default=PARROTFAG,
+                        type=str, default=config("parrot", PARROTFAG),
                         help="Parrot user name")
     parser.add_argument("--admins", "-a", nargs="*",
-                        type=str, default=ADMINFAG,
+                        type=str, default=config("admins", split=" ") or ADMINFAG,
                         help="Admin user name(s)")
     parser.add_argument("--ded", "-d", action="store_true",
                         help="Initially !ded")
@@ -68,7 +109,7 @@ def parse_args():
                         help="Let it commence")
     parser.add_argument("--greenmasterrace", action="store_true",
                         help="Only greens can do important stuff")
-    parser.add_argument("--passwd",
+    parser.add_argument("--passwd", default=config("passwd"),
                         type=str,
                         help="Greenfag yerself")
     parser.add_argument("--no-parrot", dest="noparrot", action="store_true")
@@ -76,19 +117,23 @@ def parse_args():
     parser.add_argument("--exif", dest="uploads", action="store_true")
     parser.add_argument("--debug", dest="debug", action="store_true")
     parser.add_argument("--rooms", dest="feedrooms", type=str, default=None)
-    parser.add_argument("--bind", dest="bind", type=str, default=None)
-    parser.add_argument("rooms",
-                        type=str, nargs="+",
+    parser.add_argument("--bind", dest="bind", type=str, default=config("bind"))
+    parser.add_argument("rooms", default=config("rooms", split=" "),
+                        type=str, nargs="*",
                         help="Rooms to fuck up")
-    parser.set_defaults(noparrot=False,
-                        uploads=False,
-                        exif=False,
-                        debug=False,
-                        ded=False,
-                        shitposting=False,
-                        greenmasterrace=False)
-
-    return parser.parse_args()
+    defaults = {
+        "noparrot": False,
+        "uploads": False,
+        "exif": False,
+        "debug": False,
+        "shitposting": False,
+        "greenmasterrace": False,
+        }
+    parser.set_defaults(**{k: config(k, v, type=bool) for k,v in defaults.items()})
+    rv =  parser.parse_args()
+    if not rv.rooms:
+        parser.error("Provide rooms, you cuck!")
+    return rv
 
 
 def setup_room(room, args):
@@ -121,6 +166,7 @@ def setup_room(room, args):
                 def __init__(self, **kw):
                     self.__dict__ = kw
             handler(Objectify(nick=ADMINFAG[0], rooms=rooms, msg=""))
+        args.feedrooms = None
 
     # Wire up listeners
     if handler.handlers:
@@ -177,6 +223,15 @@ def main():
         datefmt="%Y-%m-%d %H:%M:%S")
     logging.getLogger("requests").setLevel(logging.WARNING)
 
+    logger.info("%s starting up", __fulltitle__)
+
+    oldpw = args.passwd
+    try:
+        args.passwd = args.passwd and "<redacted>" or None
+        logger.info("config: %r", args)
+    finally:
+        args.passwd = oldpw
+
     if args.bind:
         override_socket(args.bind)
 
@@ -191,7 +246,7 @@ def main():
                 room = stack.enter_context(Room(room, args.parrot))
                 setup_room(room, args)
                 rooms += room,
-            logger.info("listening...")
+            logger.info("%s listening...", __fulltitle__)
             listen_many(*rooms)
     except Exception:
         logger.exception("Died, respawning")
