@@ -35,7 +35,13 @@ from ..utils import get_text, get_json
 from .command import Command
 
 
-__all__ = ["XYoutuberCommand", "XLiveleakCommand", "XIMdbCommand"]
+__all__ = [
+    "XYoutuberCommand",
+    "XLiveleakCommand",
+    "XIMdbCommand",
+    "XRedditCommand",
+    "XTwitterCommand",
+    ]
 
 logger = logging.getLogger(__name__)
 
@@ -150,4 +156,70 @@ class XIMdbCommand(Command):
                 logger.exception("imdbed")
         return False
 
+class XRedditCommand(Command):
+    reddit = re.compile(r"https?://(www.)?reddit.com/r/.+?/[\S]+")
 
+    def handles(self, cmd):
+        return bool(cmd)
+
+    def __call__(self, cmd, remainder, msg):
+        for url in self.reddit.finditer(msg.msg):
+            url = url.group(0).strip()
+            logger.debug("reddit: %s", url)
+            try:
+                jurl = url + ".json"
+                resp = get_json(jurl)
+                data = resp[0].get("data").get("children")[0].get("data")
+                target = data.get("url")
+                score = data.get("score")
+                title = data.get("title")
+                if not title:
+                    raise Exception("Failed to get title")
+                is_self = data.get("is_self") or False
+                nsfw = data.get("only_18") or False
+                if nsfw and not "nfsw" in title.lower():
+                    title = "[NSFW] {}".format(title)
+                sub = data.get("subreddit", "plebbit")
+                if is_self or not target:
+                    info = "{title}\n{sub}, Score: {score}".format(title=title, sub=sub, score=score)
+                else:
+                    info = "{title}\n{sub}, Score: {score}\n{target}".format(title=title, target=target, sub=sub, score=score)
+                self.post("Plebbit: {}", info)
+            except Exception:
+                logger.exception("reddit %s", url)
+        return False
+
+class XTwitterCommand(Command):
+    twitter = re.compile(r"https://twitter.com/(.*)/status/\d+")
+    images = re.compile(r'property="og:image"\s+content="(.*?)"')
+    title = re.compile(r'property="og:title"\s+content="(.*?)"')
+    desc = re.compile(r'property="og:description"\s+content="(.*?)"')
+
+    def handles(self, cmd):
+        return bool(cmd)
+
+    def __call__(self, cmd, remainder, msg):
+        for url in self.twitter.finditer(msg.msg):
+            user = url.group(1).strip()
+            url = url.group(0).strip()
+            logger.debug("twitter: %s", url)
+            try:
+                resp, _ = get_text(url)
+                desc = self.desc.search(resp)
+                if not desc:
+                    continue
+                desc = html.unescape(desc.group(1))[1:-1]
+                title = self.title.search(resp)
+                if not title:
+                    continue
+                title = html.unescape(title.group(1))
+                imgs = [html.unescape(i.group(1)) for i in self.images.finditer(resp) if "profile_images" not in i.group(1)]
+                imgs = " ".join(imgs)
+                if imgs:
+                    info = "{title}:\n{desc}\n{imgs}".format(title=title, desc=desc, imgs=imgs)
+                else:
+                    info = "{title}:\n{desc}".format(title=title, desc=desc)
+                self.post("{}", info)
+            except Exception:
+                logger.exception("twitter: %s", url)
+        return False
