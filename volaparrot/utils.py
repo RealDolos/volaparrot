@@ -32,6 +32,9 @@ from requests import Session
 __all__ = ["requests", "get_text", "get_json"]
 
 requests = Session()
+requests.headers.update({
+    "User-Agent": "Mozilla/5.0 (Linux; cli) pyrequests/0.1 (python, like Gecko, like KHTML, like wget, like CURL) volaparrot/1.0",
+    })
 
 @lru_cache(128)
 def get_text(url):
