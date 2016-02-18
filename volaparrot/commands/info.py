@@ -28,11 +28,12 @@ import logging
 from time import time
 
 from ..constants import *
+from .._version import *
 from ..utils import get_text, get_json
 from .command import Command
 
 
-__all__ = ["NiggersCommand", "ObamasCommand", "CheckModCommand"]
+__all__ = ["NiggersCommand", "ObamasCommand", "CheckModCommand", "AboutCommand"]
 
 logger = logging.getLogger(__name__)
 
@@ -92,4 +93,11 @@ class CheckModCommand(Command):
             logger.exception("huh?")
             return False
 
+class AboutCommand(Command):
+    handlers = "!about", ".about", "!parrot"
 
+    def __call__(self, cmd, remainder, msg):
+        if not self.allowed(msg):
+            return False
+        self.post("{}, I am {}, watch me fly:\n{}", remainder or msg.nick, __fulltitle__, "https://github.com/RealDolos/volaparrot/")
+        return True
