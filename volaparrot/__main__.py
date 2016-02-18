@@ -74,18 +74,27 @@ class Config:
         config.read(loc)
         return config[sec]
 
+    @staticmethod
+    def typed(type, value):
+        if type is bool:
+            return str(value).lower().strip() in ("yes", "true", "t", "1", "on")
+        return type(value)
+
+
     def __call__(self, key, default=None, split=None, type=None):
         rv = self.curr.get(key, self.home.get(key, default))
         if rv is None:
+            if type is bool:
+                return False
             return rv
         if split:
             if type:
-                rv = [type(i) for i in rv.split(split)]
+                rv = [self.typed(type, i) for i in rv.split(split)]
             else:
                 rv = rv.split(split)
             return rv
         elif type:
-            return type(rv)
+            return self.typed(type, rv)
         return rv
 
 
