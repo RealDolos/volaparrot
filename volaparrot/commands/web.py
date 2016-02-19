@@ -40,6 +40,7 @@ __all__ = [
     "XLiveleakCommand",
     "XIMdbCommand",
     "XRedditCommand",
+    "XGithubIssuesCommand",
     "XTwitterCommand",
     ]
 
@@ -188,6 +189,28 @@ class XRedditCommand(Command):
             except Exception:
                 logger.exception("reddit %s", url)
         return False
+
+
+class XGithubIssuesCommand(Command):
+    issues = re.compile(r"https://github.com/.*?/(?:issues|pull)/\d+")
+
+    def handles(self, cmd):
+        return bool(cmd)
+
+    def __call__(self, cmd, remainder, msg):
+        for url in self.issues.finditer(msg.msg):
+            url = url.group(0)
+            try:
+                resp = get_json(url.strip().replace("https://github.com/", "https://api.github.com/repos/").replace("/pull/", "/pulls/"))
+                base = '[{r[state]}] "{r[title]}" by {r[user][login]}'.format(r=resp)
+                body = resp.get("body")
+                if len(body) > 295 - len(base):
+                    body = body[0:295 - len(base)] + "…"
+                self.post("{}\n{}", base, body)
+            except Exception:
+                logger.exception("failed to github")
+        return False
+
 
 class XTwitterCommand(Command):
     twitter = re.compile(r"https://twitter.com/(.*)/status/\d+")
