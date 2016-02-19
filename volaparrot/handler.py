@@ -67,9 +67,13 @@ class ChatHandler:
                     pulse_handlers += inst,
             except Exception:
                 logger.exception("Failed to initialize handler %s", str(cand))
-        self.handlers = sorted(handlers, key=repr)
-        self.file_handlers = sorted(file_handlers, key=repr)
-        self.pulse_handlers = sorted(pulse_handlers, key=repr)
+
+        def sort(a):
+            return a.__class__.__name__
+
+        self.handlers = sorted(handlers, key=sort)
+        self.file_handlers = sorted(file_handlers, key=sort)
+        self.pulse_handlers = sorted(pulse_handlers, key=sort)
         logger.debug("Initialized handlers %s",
              ", ".join(repr(h) for h in self.handlers))
         logger.debug("Initialized file handlers %s",
