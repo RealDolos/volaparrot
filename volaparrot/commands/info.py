@@ -27,13 +27,17 @@ import logging
 
 from time import time
 
+from humanize import naturaldelta
+from lru import LRU
+
 from ..constants import *
 from .._version import *
 from ..utils import get_text, get_json
-from .command import Command
+from .command import Command, PulseCommand
+from .db import DBCommand
 
 
-__all__ = ["NiggersCommand", "ObamasCommand", "CheckModCommand", "AboutCommand"]
+__all__ = ["NiggersCommand", "ObamasCommand", "CheckModCommand", "AboutCommand", "SeenCommand"]
 
 logger = logging.getLogger(__name__)
 
@@ -100,4 +104,61 @@ class AboutCommand(Command):
         if not self.allowed(msg):
             return False
         self.post("{}, I am {}, watch me fly:\n{}", remainder or msg.nick, __fulltitle__, "https://github.com/RealDolos/volaparrot/")
+        return True
+
+
+class SeenCommand(DBCommand, PulseCommand):
+    interval = 5 * 60
+
+    seen = LRU(50)
+    start = time()
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.conn.execute("CREATE TABLE IF NOT EXISTS seen ("
+                          "user TEXT PRIMARY KEY, "
+                          "time INT"
+                          ")")
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SELECT time FROM seen ORDER BY time ASC LIMIT 1")
+            self.start = int(cur.fetchone()[0]) / 1000
+        except Exception:
+            logger.exception("Failed to get min seen")
+
+
+    def handles(self, cmd):
+        return True
+
+    def onpulse(self, pulse):
+        try:
+            logger.info("Dumping seen to db")
+            cur = self.conn.cursor()
+            cur.executemany(
+                "INSERT OR REPLACE INTO seen VALUES(?, ?)",
+                list((u, int(v * 1000)) for u, v in self.seen.items())
+                )
+        except Exception:
+            logger.exception("Failed to update seen")
+
+    def __call__(self, cmd, remainder, msg):
+        self.seen[msg.nick.casefold()] = time()
+        if cmd != "!seen":
+            return False
+
+        if not self.allowed(msg) or not remainder:
+            return False
+
+        remainder = remainder.strip()
+        crem = remainder.casefold()
+        seen = self.seen.get(crem)
+        if not seen:
+            cur = self.conn.cursor()
+            cur.execute("SELECT time FROM seen WHERE user = ?", (crem,))
+            seen = cur.fetchone()
+            seen = seen and int(seen[0]) / 1000
+        if not seen:
+            self.post("I have not seen {} since {}", remainder, naturaldelta(time() - self.start))
+        else:
+            self.post("{} was last seen {} ago", remainder, naturaldelta(time() - seen))
         return True

@@ -5,3 +5,4 @@ volapi
 ExifRead
 path.py
 lru-dict
+humanize
