@@ -27,6 +27,10 @@ import logging
 import random
 import re
 
+from subprocess import Popen, PIPE
+
+from lru import LRU
+
 from .command import Command
 
 
@@ -139,3 +143,68 @@ class ChenCommand(Command):
         self.post("{}: M{}RC", user, "E" * min(50, max(1, cmd.lower().count("e"))))
         return True
 
+class ProfanityCommand(Command):
+    extract = re.compile(r"1:.*?\s+warning\s+(.*?)\s\S+$")
+    handlers = "!analyze", "!sjw", "!profanity"
+    lru = LRU(20)
+
+    def handles(self, cmd):
+        return True
+
+    @staticmethod
+    def alex(string):
+        with Popen("alex -t".split(" "), stdout=PIPE, stdin=PIPE) as process:
+            try:
+                string = string.encode("utf-8")
+                rv = str(process.communicate(string, timeout=3)[0], "utf-8").split("\n")
+            except TimeoutExpired:
+                process.kill()
+                raise
+        rv = (ProfanityCommand.extract.search(l.strip()) for l in rv)
+        rv = set(m.group(1).strip() for m in rv if m)
+        return rv
+
+    def __call__(self, cmd, remainder, msg):
+        if cmd not in self.handlers:
+            self.lru[msg.nick.casefold()] = (msg.nick, msg.msg)
+            return False
+
+        if not self.allowed(msg):
+            return False
+        try:
+            if remainder:
+                user = remainder.strip().casefold()
+                user, text = self.lru.get(user, (None, None))
+            else:
+                user, text = self.lru.items()[0][1]
+            if not text:
+                return False
+            anal = ", ".join(self.alex(text))
+            if not anal:
+                anal = "No issues found, SJW approved message"
+            lanal = len(anal)
+            if lanal > 220:
+                anal = anal[0:219] + "…"
+                lanal = len(anal)
+            lrem = 295 - lanal
+            quote = ">{user}: {text}".format(user=user, text=text)
+            if len(quote) > lrem:
+                quote = quote[0:lrem] + "…"
+            self.post("{}\n{}", quote, anal)
+            return True
+
+        except Exception:
+            logger.exception("failed to analyze")
+            return False
+
+
+try:
+    if "profane" not in "".join(ProfanityCommand.alex("you're a gay")):
+        raise Exception("Not found")
+    __all__ += "ProfanityCommand",
+except Exception:
+    logger.warning("Cannot use alex, ProfanityCommand is not available")
+
+
+if __name__ == "__main__":
+    print(ProfanityCommand.alex("you're a gay"))
