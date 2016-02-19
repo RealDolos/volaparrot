@@ -46,203 +46,190 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+class WebCommand(Command):
+    needle = re.compile("^$"), 0
 
-class XYoutuberCommand(Command):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        if isinstance(self.needle, str):
+            self.needle = self.needle, 0
+        if self.needle and isinstance(self.needle[0], str):
+            self.needle = re.compile(self.needle[0]), self.needle[1]
+
+    def handles(self, cmd):
+        return bool(cmd)
+
+    def fixup(self, url):
+        return url
+
+    def __call__(self, cmd, remainder, msg):
+        needle, group = self.needle
+        for url in needle.finditer(msg.msg):
+            url = url.group(group).strip()
+            try:
+                url = self.fixup(url)
+                if not url:
+                    continue
+                if self.onurl(url, msg) is False:
+                    break
+            except Exception:
+                logger.exception("failed to process")
+        return False
+
+    def onurl(self, url, msg):
+        raise NotImplementedError()
+
+    @staticmethod
+    def extract(url, *args):
+        args = [re.compile(a) if isinstance(a, str) else a for a in args]
+        text, _ = get_text(url)
+        return [text,] + [a.search(text) for a in args]
+
+    @staticmethod
+    def unescape(string):
+        return string and html.unescape(string.strip())
+
+
+class XYoutuberCommand(WebCommand):
+    needle = r"https?://(?:www\.)?(?:youtu\.be/\S+|youtube\.com/(?:v|watch|embed)\S+)"
+
     description = re.compile(r'itemprop="description"\s+content="(.+?)"')
     duration = re.compile(r'itemprop="duration"\s+content="(.+?)"')
     title = re.compile(r'itemprop="name"\s+content="(.+?)"')
-    youtube = re.compile(
-        r"https?://(?:www\.)?(?:youtu\.be/\S+|youtube\.com/(?:v|watch|embed)\S+)")
 
-    def handles(self, cmd):
-        return True
+    def onurl(self, url, msg):
+        _, title, duration, desc = self.extract(url, self.title, self.duration, self.description)
+        title = self.unescape(title.group(1))
+        if not title:
+            return
+        if duration:
+            duration = str(isodate.parse_duration(duration.group(1)))
+        desc = self.unescape(desc.group(1))
+        desc = None
 
-    def __call__(self, cmd, remainder, msg):
-        for url in self.youtube.finditer(msg.msg):
-            try:
-                resp, _ = get_text(url.group(0).strip())
-                title = self.title.search(resp)
-                if not title:
-                    continue
-                title = html.unescape(title.group(1).strip())
-                if not title:
-                    continue
-                duration = self.duration.search(resp)
-                if duration:
-                    duration = str(isodate.parse_duration(duration.group(1)))
-                desc = self.description.search(resp)
-                desc = None
-                if desc:
-                    desc = html.unescape(desc.group(1)).strip()
-                if "liquid" in msg.nick.lower():
-                    self.post("{}: YouNow links are not allowed, you pedo", msg.nick)
-                elif duration and desc and msg.nick.lower() not in ("dongmaster", "doc"):
-                    self.post("YouTube: {} ({})\n{}", title, duration, desc)
-                elif duration:
-                    self.post("YouTube: {} ({})", title, duration)
-                elif desc:
-                    self.post("YouTube: {}\n{}", title, desc)
-                else:
-                    self.post("YouTube: {}", title)
-            except Exception:
-                logger.exception("youtubed")
-        return False
+        if "liquid" in msg.nick.lower():
+            self.post("{}: YouNow links are not allowed, you pedo", msg.nick)
+        elif duration and desc and msg.nick.lower() not in ("dongmaster", "doc"):
+            self.post("YouTube: {} ({})\n{}", title, duration, desc)
+        elif duration:
+            self.post("YouTube: {} ({})", title, duration)
+        elif desc:
+            self.post("YouTube: {}\n{}", title, desc)
+        else:
+            self.post("YouTube: {}", title)
 
 
-class XLiveleakCommand(Command):
+class XLiveleakCommand(WebCommand):
+    needle = r"http://(?:.+?\.)?liveleak\.com/view\?[\S]+"
+
     description = re.compile(r'property="og:description"\s+content="(.+?)"')
     title = re.compile(r'property="og:title"\s+content="(.+?)"')
-    liveleak = re.compile(r"http://(?:.+?\.)?liveleak\.com/view\?[\S]+")
 
-    def handles(self, cmd):
-        return True
+    def onurl(self, url, msg):
+        _, title, desc = self.extract(url, self.title, self.description)
+        title = self.unescape(title.group(1))
+        if not title:
+            return
+        desc = self.unescape(desc.group(1))
 
-    def __call__(self, cmd, remainder, msg):
-        for url in self.liveleak.finditer(msg.msg):
+        if desc:
+            self.post("{}\n{}", title, desc)
+        else:
+            self.post("{}", title)
+
+
+class XIMdbCommand(WebCommand):
+    needle = r"imdb\.com/title/(tt\d+)", 1
+
+    def onurl(self, url, msg):
+        resp = get_json("http://www.omdbapi.com/?i={}&plot=short&r=json".format(url))
+        logger.debug("%s", resp)
+        title = resp.get("Title")
+        if not resp.get("Response") == "True" or not title:
+            return
+        sid = resp.get("seriesID")
+        if sid:
+            sid = get_json("http://www.omdbapi.com/?i={}&plot=short&r=json".format(sid))
             try:
-                resp, _ = get_text(url.group(0).strip())
-                title = self.title.search(resp)
-                if not title:
-                    continue
-                title = html.unescape(title.group(1).strip())
-                if not title:
-                    continue
-                desc = self.description.search(resp)
-                if desc:
-                    desc = html.unescape(desc.group(1)).strip()
-                if desc:
-                    self.post("{}\n{}", title, desc)
-                else:
-                    self.post("{}", title)
+                title = "{} S{:02}E{:02} - {}".format(sid.get("Title"),
+                                                      int(resp.get("Season", "0")),
+                                                      int(resp.get("Episode", "0")),
+                                                      title)
             except Exception:
-                logger.exception("liveleaked")
-        return False
+                logger.exception("series")
+
+        year = resp.get("Year", "0 BC")
+        rating = resp.get("imdbRating", "0.0")
+        rated = resp.get("Rated", "?")
+        runtime = resp.get("Runtime", "over 9000 mins")
+        plot = resp.get("Plot")
+        if not plot:
+            self.post("{}\n{}, {}, {}, {}", title, year, rating, rated, runtime)
+        else:
+            self.post("{}\n{}, {}, {}, {}\n{}", title, year, rating, rated, runtime, plot)
 
 
-class XIMdbCommand(Command):
-    imdb = re.compile(r"imdb\.com/title/(tt\d+)")
+class XRedditCommand(WebCommand):
+    needle = r"https?://(www.)?reddit.com/r/.+?/[\S]+"
 
-    def handles(self, cmd):
-        return True
+    def onurl(self, url, msg):
+        jurl = url + ".json"
+        resp = get_json(jurl)
+        data = resp[0].get("data").get("children")[0].get("data")
+        target = data.get("url")
+        score = data.get("score")
+        title = data.get("title")
+        if not title:
+            return
+        is_self = data.get("is_self") or False
+        nsfw = data.get("only_18") or False
+        if nsfw and not "nfsw" in title.lower():
+            title = "[NSFW] {}".format(title)
+        sub = data.get("subreddit", "plebbit")
 
-    def __call__(self, cmd, remainder, msg):
-        for url in self.imdb.finditer(msg.msg):
-            try:
-                resp = get_json(
-                    "http://www.omdbapi.com/?i={}&plot=short&r=json".format(url.group(1).strip()))
-                logger.debug("%s", resp)
-                title = resp.get("Title")
-                if not resp.get("Response") == "True" or not title:
-                    continue
-                sid = resp.get("seriesID")
-                if sid:
-                    sid = get_json("http://www.omdbapi.com/?i={}&plot=short&r=json".format(sid))
-                    try:
-                        title = "{} S{:02}E{:02} - {}".format(sid.get("Title"),
-                                                              int(resp.get("Season", "0")),
-                                                              int(resp.get("Episode", "0")),
-                                                              title)
-                    except Exception:
-                        logger.exception("series")
-                year = resp.get("Year", "0 BC")
-                rating = resp.get("imdbRating", "0.0")
-                rated = resp.get("Rated", "?")
-                runtime = resp.get("Runtime", "over 9000 mins")
-                plot = resp.get("Plot")
-                if not plot:
-                    self.post("{}\n{}, {}, {}, {}", title, year, rating, rated, runtime)
-                else:
-                    self.post("{}\n{}, {}, {}, {}\n{}", title, year, rating, rated, runtime, plot)
-            except Exception:
-                logger.exception("imdbed")
-        return False
-
-class XRedditCommand(Command):
-    reddit = re.compile(r"https?://(www.)?reddit.com/r/.+?/[\S]+")
-
-    def handles(self, cmd):
-        return bool(cmd)
-
-    def __call__(self, cmd, remainder, msg):
-        for url in self.reddit.finditer(msg.msg):
-            url = url.group(0).strip()
-            logger.debug("reddit: %s", url)
-            try:
-                jurl = url + ".json"
-                resp = get_json(jurl)
-                data = resp[0].get("data").get("children")[0].get("data")
-                target = data.get("url")
-                score = data.get("score")
-                title = data.get("title")
-                if not title:
-                    raise Exception("Failed to get title")
-                is_self = data.get("is_self") or False
-                nsfw = data.get("only_18") or False
-                if nsfw and not "nfsw" in title.lower():
-                    title = "[NSFW] {}".format(title)
-                sub = data.get("subreddit", "plebbit")
-                if is_self or not target:
-                    info = "{title}\n{sub}, Score: {score}".format(title=title, sub=sub, score=score)
-                else:
-                    info = "{title}\n{sub}, Score: {score}\n{target}".format(title=title, target=target, sub=sub, score=score)
-                self.post("Plebbit: {}", info)
-            except Exception:
-                logger.exception("reddit %s", url)
-        return False
+        if is_self or not target:
+            info = "{title}\n{sub}, Score: {score}".format(title=title, sub=sub, score=score)
+        else:
+            info = "{title}\n{sub}, Score: {score}\n{target}".format(
+                title=title, target=target, sub=sub, score=score)
+        self.post("Plebbit: {}", info)
 
 
-class XGithubIssuesCommand(Command):
-    issues = re.compile(r"https://github.com/.*?/(?:issues|pull)/\d+")
+class XGithubIssuesCommand(WebCommand):
+    needle = r"https://github.com/.*?/(?:issues|pull)/\d+"
 
-    def handles(self, cmd):
-        return bool(cmd)
-
-    def __call__(self, cmd, remainder, msg):
-        for url in self.issues.finditer(msg.msg):
-            url = url.group(0)
-            try:
-                resp = get_json(url.strip().replace("https://github.com/", "https://api.github.com/repos/").replace("/pull/", "/pulls/"))
-                base = '[{r[state]}] "{r[title]}" by {r[user][login]}'.format(r=resp)
-                body = resp.get("body")
-                if len(body) > 295 - len(base):
-                    body = body[0:295 - len(base)] + "…"
-                self.post("{}\n{}", base, body)
-            except Exception:
-                logger.exception("failed to github")
-        return False
+    def onurl(self, url, msg):
+        resp = get_json(
+            url.replace("https://github.com/", "https://api.github.com/repos/").
+            replace("/pull/", "/pulls/"))
+        base = '[{r[state]}] "{r[title]}" by {r[user][login]}'.format(r=resp)
+        body = resp.get("body")
+        if len(body) > 295 - len(base):
+            body = body[0:295 - len(base)] + "…"
+        self.post("{}\n{}", base, body)
 
 
-class XTwitterCommand(Command):
-    twitter = re.compile(r"https://twitter.com/(.*)/status/\d+")
+class XTwitterCommand(WebCommand):
+    needle = r"https://twitter.com/(.*)/status/\d+"
+
     images = re.compile(r'property="og:image"\s+content="(.*?)"')
     title = re.compile(r'property="og:title"\s+content="(.*?)"')
     desc = re.compile(r'property="og:description"\s+content="(.*?)"')
 
-    def handles(self, cmd):
-        return bool(cmd)
-
-    def __call__(self, cmd, remainder, msg):
-        for url in self.twitter.finditer(msg.msg):
-            user = url.group(1).strip()
-            url = url.group(0).strip()
-            logger.debug("twitter: %s", url)
-            try:
-                resp, _ = get_text(url)
-                desc = self.desc.search(resp)
-                if not desc:
-                    continue
-                desc = html.unescape(desc.group(1))[1:-1]
-                title = self.title.search(resp)
-                if not title:
-                    continue
-                title = html.unescape(title.group(1))
-                imgs = [html.unescape(i.group(1)) for i in self.images.finditer(resp) if "profile_images" not in i.group(1)]
-                imgs = " ".join(imgs)
-                if imgs:
-                    info = "{title}:\n{desc}\n{imgs}".format(title=title, desc=desc, imgs=imgs)
-                else:
-                    info = "{title}:\n{desc}".format(title=title, desc=desc)
-                self.post("{}", info)
-            except Exception:
-                logger.exception("twitter: %s", url)
-        return False
+    def onurl(self, url, msg):
+        resp, desc, title = self.extract(url, self.desc, self.title)
+        desc = self.unescape(desc.group(1))[1:-1]
+        if not desc:
+            return
+        title = self.unescape(title.group(1))
+        if not title:
+            return
+        imgs = [html.unescape(i.group(1))
+                for i in self.images.finditer(resp)
+                if "profile_images" not in i.group(1)]
+        imgs = " ".join(imgs)
+        if imgs:
+            info = "{title}:\n{desc}\n{imgs}".format(title=title, desc=desc, imgs=imgs)
+        else:
+            info = "{title}:\n{desc}".format(title=title, desc=desc)
+        self.post("{}", info)
