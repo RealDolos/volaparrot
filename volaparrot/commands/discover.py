@@ -44,13 +44,6 @@ logger = logging.getLogger(__name__)
 class DiscoverCommand(DBCommand, Command):
     handlers = "!addroom", "!delroom", "!discover", "!room"
 
-    @staticmethod
-    def _stat(room):
-        with Room(room, "letest") as remote:
-            remote.listen(onusercount=lambda x: False)
-            return (remote.title, max(remote.user_count, 0),
-                    len(remote.files), remote.config.get("disabled"))
-
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
@@ -245,5 +238,3 @@ class MoarDiscoverCommand(DiscoverCommand, PulseCommand):
 
         if self.add_room(msg):
             MoarDiscoverCommand.dirty = True
-
-
