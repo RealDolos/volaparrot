@@ -65,7 +65,8 @@ class UploadDownloadCommand(DBCommand, Command):
             return None
         newid = None
         while not newid or newid.exists():
-            newid = path(str(uuid4()) + ".cuckload")
+            newid = path("downloads") / "{!s}.cuckload".format(uuid4())
+        newid.parent.mkdir_p()
         with open(newid, "wb") as outp:
             outp.write(content.read() if hasattr(content, "read") else content.encode("utf-8"))
         try:
