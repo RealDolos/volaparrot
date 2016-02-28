@@ -113,6 +113,47 @@ class SeenCommand(DBCommand, PulseCommand):
     seen = LRU(50)
     start = time()
 
+    usermap = {
+      "doiosodolos": "Daniel",
+      "haskell": "Daniel",
+      "ekecheiria": "Daniel",
+      "baronbone": "Daniel",
+      "cyberia": "Daniel",
+      "countcoccyx": "Daniel",
+      "doc": "Dongmaster",
+      "jewmobile": "TheJIDF",
+      "jew": "TheJIDF",
+      "thejew": "TheJIDF",
+      "mrshlomo": "TheJIDF",
+      "pedo": "Counselor",
+      "pede": "Counselor",
+      "briseis": "Counselor",
+      "notnot": "Counselor",
+      "counselorpedro": "Counselor",
+      "marky": "SuperMarky",
+      "mcgill": "SuperMarky",
+      "voladolos": "SuperMarky",
+      "affarisdolos": "RealDolos",
+      "gnuwin7dolos": "RealDolos",
+      "cuck": "RealDolos",
+      "merc": "MercWMouth",
+      "cunt": "MercWMouth",
+      "kak": "MercWMouth",
+      "dolosodolos": "MODChatBotGladio",
+      "fakedolos": "kreg",
+      "laindolos": "kreg",
+      "fakekreg": "kreg",
+      "DaVinci": "Ian",
+      "CuckDolos": "Ian",
+      "DolosCuck": "Ian",
+      "apha": "Polish plebbit pedo",
+      }
+
+    def mapname(self, name):
+        if name.startswith("Xsa"):
+            return "Xsa"
+        return self.usermap.get(name.lower(), name)
+
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.conn.execute("CREATE TABLE IF NOT EXISTS seen ("
@@ -142,7 +183,7 @@ class SeenCommand(DBCommand, PulseCommand):
             logger.exception("Failed to update seen")
 
     def __call__(self, cmd, remainder, msg):
-        self.seen[msg.nick.casefold()] = time()
+        self.seen[self.mapname(msg.nick).casefold()] = time()
         if cmd != "!seen":
             return False
 
@@ -150,6 +191,7 @@ class SeenCommand(DBCommand, PulseCommand):
             return False
 
         remainder = remainder.strip()
+        remainder = self.mapname(remainder)
         crem = remainder.casefold()
         seen = self.seen.get(crem)
         if not seen:
