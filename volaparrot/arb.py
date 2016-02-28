@@ -52,8 +52,7 @@ def pulse(self, room, interval=0.2):
                 if room.connected:
                     room.conn.enqueue_data("pulse", time())
                     room.conn.process_queues()
-                    if room.connected:
-                        yield from nextsleep
+                yield from nextsleep
             except Exception:
                 logger.exception("Failed to enqueue pulse")
 
