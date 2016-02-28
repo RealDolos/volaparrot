@@ -33,6 +33,7 @@ from volapi import Room
 
 from .command import Command, PulseCommand
 from .db import DBCommand
+from ..constants import BLACKROOMS
 from ..roomstat import roomstat
 
 
@@ -69,11 +70,17 @@ class DiscoverCommand(DBCommand, Command):
             remainder = None
         nick = remainder or msg.nick
 
+        if msg.nick.lower() == "beetroot" and not limit:
+            self.post("{} seriously needs to learn how to bookmark! No rooms for you!", msg.nick)
+            return True
+
         self.post("{}: {}", nick, self.make(295 - len(nick), limit))
         return True
 
     def get_rooms(self, limit=None):
         def keyfn(room):
+            if room[0] in BLACKROOMS:
+                return 0, room[0]
             return (room[2] + 1) * log(max(2, room[3])), room[0]
 
         cur = self.conn.cursor()
