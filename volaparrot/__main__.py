@@ -125,6 +125,7 @@ def parse_args():
     parser.add_argument("--uploads", dest="uploads", action="store_true")
     parser.add_argument("--exif", dest="exif", action="store_true")
     parser.add_argument("--debug", dest="debug", action="store_true")
+    parser.add_argument("--softlogin", dest="softlogin", action="store_true")
     parser.add_argument("--rooms", dest="feedrooms", type=str, default=None)
     parser.add_argument("--bind", dest="bind", type=str, default=config("bind"))
     parser.add_argument("rooms", default=config("rooms", split=" "),
@@ -135,6 +136,7 @@ def parse_args():
         "uploads": False,
         "exif": False,
         "debug": False,
+        "softlogin": False,
         "shitposting": False,
         "greenmasterrace": False,
         }
@@ -153,7 +155,8 @@ def setup_room(room, args):
             room.user.login(args.passwd)
         except Exception:
             logger.exception("Failed to login")
-            return 1
+            if not args.softlogin:
+                return 1
     handler = ChatHandler(room, args)
 
     # XXX Handle elsewhere
