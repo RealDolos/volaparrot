@@ -27,8 +27,12 @@ import logging
 import html
 import re
 
+from time import time
+
 # pylint: disable=import-error
 import isodate
+
+from lru import LRU
 # pylint: enable=import-error
 
 from ..utils import get_text, get_json
@@ -48,6 +52,8 @@ logger = logging.getLogger(__name__)
 
 class WebCommand(Command):
     needle = re.compile("^$"), 0
+    cooldown = LRU(20)
+    timeout = 3 * 60
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -64,8 +70,13 @@ class WebCommand(Command):
 
     def __call__(self, cmd, remainder, msg):
         needle, group = self.needle
+        now = time()
         for url in needle.finditer(msg.msg):
             url = url.group(group).strip()
+            if self.cooldown.get(url, 0) + self.timeout > now:
+                continue
+
+            self.cooldown[url] = now
             try:
                 url = self.fixup(url)
                 if not url:
