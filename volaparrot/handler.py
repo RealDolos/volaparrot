@@ -85,6 +85,8 @@ class ChatHandler:
         logger.info(msg)
         if msg.nick == self.room.user.name:
             return
+        if msg.nick == "MOTD" and msg.admin:
+            return
         lnick = msg.nick.casefold()
         if any(i in lnick for i in BLACKFAGS):
             return
