@@ -98,15 +98,20 @@ class WebCommand(Command):
 
     @staticmethod
     def unescape(string):
-        return string and html.unescape(string.strip())
+        if string:
+            string = html.unescape(string.strip())
+            # shit is double escaped quite often
+            string = string.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&amp;", "&")
+            string = re.sub(r"[\s+\n]+", " ", string.replace("\r\n", "\n"))
+        return string
 
 
 class XYoutuberCommand(WebCommand):
     needle = r"https?://(?:www\.)?(?:youtu\.be/\S+|youtube\.com/(?:v|watch|embed)\S+)"
 
-    description = re.compile(r'itemprop="description"\s+content="(.+?)"')
-    duration = re.compile(r'itemprop="duration"\s+content="(.+?)"')
-    title = re.compile(r'itemprop="name"\s+content="(.+?)"')
+    description = re.compile(r'itemprop="description"\s+content="(.+?)"', re.M | re.S)
+    duration = re.compile(r'itemprop="duration"\s+content="(.+?)"', re.M | re.S)
+    title = re.compile(r'itemprop="name"\s+content="(.+?)"', re.M | re.S)
 
     def onurl(self, url, msg):
         _, title, duration, desc = self.extract(url, self.title, self.duration, self.description)
@@ -133,8 +138,8 @@ class XYoutuberCommand(WebCommand):
 class XLiveleakCommand(WebCommand):
     needle = r"http://(?:.+?\.)?liveleak\.com/view\?[\S]+"
 
-    description = re.compile(r'property="og:description"\s+content="(.+?)"')
-    title = re.compile(r'property="og:title"\s+content="(.+?)"')
+    description = re.compile(r'property="og:description"\s+content="(.+?)"', re.M | re.S)
+    title = re.compile(r'property="og:title"\s+content="(.+?)"', re.M | re.S)
 
     def onurl(self, url, msg):
         _, title, desc = self.extract(url, self.title, self.description)
@@ -223,9 +228,9 @@ class XGithubIssuesCommand(WebCommand):
 class XTwitterCommand(WebCommand):
     needle = r"https://twitter.com/(.*)/status/\d+"
 
-    images = re.compile(r'property="og:image"\s+content="(.*?)"')
-    title = re.compile(r'property="og:title"\s+content="(.*?)"')
-    desc = re.compile(r'property="og:description"\s+content="(.*?)"')
+    images = re.compile(r'property="og:image"\s+content="(.*?)"', re.M | re.S)
+    title = re.compile(r'property="og:title"\s+content="(.*?)"', re.M | re.S)
+    desc = re.compile(r'property="og:description"\s+content="(.*?)"', re.M | re.S)
 
     def onurl(self, url, msg):
         resp, desc, title = self.extract(url, self.desc, self.title)
