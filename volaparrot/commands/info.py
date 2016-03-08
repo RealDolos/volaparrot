@@ -114,6 +114,7 @@ class SeenCommand(DBCommand, PulseCommand):
     start = time()
 
     usermap = {
+      "auxo's waifu": "triggu",
       "doiosodolos": "Daniel",
       "haskell": "Daniel",
       "ekecheiria": "Daniel",
