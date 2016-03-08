@@ -88,7 +88,7 @@ class Stat:
 
 
 class RoomStatsCommand(Command):
-    handlers = ".roomstats", ".stats", ".typestats", ".extstats"
+    handlers = ".roomstats", ".stats", ".typestats", ".extstats", "💩roomstats"
     types = {"user": lambda user, file: user == file.uploader.casefold(),
              "type": lambda type, file: type == file.type.casefold(),
              "ext": lambda ext, file:
