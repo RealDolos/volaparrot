@@ -11,3 +11,4 @@ from .web import *
 from .exif import *
 from .pulse import *
 from .request import *
+from .quotes import *
