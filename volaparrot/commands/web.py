@@ -122,6 +122,8 @@ class XYoutuberCommand(WebCommand):
             duration = str(isodate.parse_duration(duration.group(1)))
         desc = self.unescape(desc.group(1))
         desc = None
+        if "mmortal" in msg.nick.lower():
+            title += " (probably some shit music only a retard would like)"
 
         if "liquid" in msg.nick.lower():
             self.post("{}: YouNow links are not allowed, you pedo", msg.nick)

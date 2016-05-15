@@ -70,6 +70,12 @@ class EightballCommand(Command):
         if not remainder.strip():
             self.post("{}: You're a faggot!", msg.nick)
             return True
+        if msg.nick.lower() == "liquid":
+            self.post("{}: You're a cuck!", msg.nick)
+            return True
+        if "mod" in remainder.lower():
+            self.post("{}:The only true mod is VolaMerc 2.0!", msg.nick)
+            return True
         self.post("{}: {}", msg.nick, random.choice(self.phrases))
         return True
 
@@ -92,6 +98,8 @@ class RevolverCommand(Command):
         self.call_later(7, self.room.post_chat, "cocking...", is_me=True)
         if shoot == 6:
             self.call_later(8, self.post, "BANG, {} is dead", msg.nick)
+        elif shoot == 5:
+            self.call_later(8, self.post, "{}, you missed but still managed to hit Counselor.\nCongrats, you killed a pede!", msg.nick)
         else:
             self.call_later(8, self.post, "CLICK, {} is still foreveralone", msg.nick)
         return True

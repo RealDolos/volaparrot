@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 class DiscoverCommand(DBCommand, Command):
-    handlers = "!addroom", "!delroom", "!discover", "!room"
+    handlers = "!addroom", "!delroom", "!discover", "!room", "!dickover"
 
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
@@ -70,8 +70,8 @@ class DiscoverCommand(DBCommand, Command):
             remainder = None
         nick = remainder or msg.nick
 
-        if msg.nick.lower() == "beetroot" and not limit:
-            self.post("{} seriously needs to learn how to bookmark! No rooms for you!", msg.nick)
+        if msg.nick.lower() == "liquid":
+            self.post("{}, volafile does not support cucking or CP! No rooms for you!", msg.nick)
             return True
 
         self.post("{}: {}", nick, self.make(295 - len(nick), limit))
