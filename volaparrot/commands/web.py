@@ -42,6 +42,7 @@ from .command import Command
 __all__ = [
     "XYoutuberCommand",
     "XLiveleakCommand",
+    "XVimeoCommand",
     "XIMdbCommand",
     "XRedditCommand",
     "XGithubIssuesCommand",
@@ -154,6 +155,24 @@ class XLiveleakCommand(WebCommand):
             self.post("{}\n{}", title, desc)
         else:
             self.post("{}", title)
+
+class XVimeoCommand(WebCommand):
+    needle = r"https?://vimeo.com/\d+"
+
+    description = re.compile(r'property="og:description"\s+content="(.+?)"', re.M | re.S)
+    title = re.compile(r'property="og:title"\s+content="(.+?)"', re.M | re.S)
+
+    def onurl(self, url, msg):
+        _, title, desc = self.extract(url, self.title, self.description)
+        title = self.unescape(title.group(1))
+        if not title:
+            return
+        desc = self.unescape(desc.group(1))
+
+        if desc:
+            self.post("Vimeo: {}\n{}", title, desc)
+        else:
+            self.post("Vimeo: {}", title)
 
 
 class XIMdbCommand(WebCommand):
