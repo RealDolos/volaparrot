@@ -201,7 +201,9 @@ class SeenCommand(DBCommand, PulseCommand):
             cur.execute("SELECT time FROM seen WHERE user = ?", (crem,))
             seen = cur.fetchone()
             seen = seen and int(seen[0]) / 1000
-        if not seen:
+        if remainder.lower() == "lain":
+            self.post("Lain was never here, will never come here, and does not care about volafile at all. Please donate!")
+        elif not seen:
             self.post("I have not seen {} since {}", remainder, naturaldelta(time() - self.start))
         else:
             self.post("{} was last seen {} ago", remainder, naturaldelta(time() - seen))
