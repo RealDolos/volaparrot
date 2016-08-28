@@ -49,7 +49,8 @@ def _init_conn():
                  "title TEXT, "
                  "users INT, "
                  "files INT, "
-                 "alive INT DEFAULT 1"
+                 "alive INT DEFAULT 1, "
+                 "firstadded INT DEFAULT 0 "
                  ")")
     return conn
 

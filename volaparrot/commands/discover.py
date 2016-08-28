@@ -33,7 +33,7 @@ from volapi import Room
 
 from .command import Command, PulseCommand
 from .db import DBCommand
-from ..constants import BLACKROOMS
+from ..constants import BLACKROOMS, WHITEROOMS
 from ..roomstat import roomstat
 
 
@@ -82,6 +82,8 @@ class DiscoverCommand(DBCommand, Command):
 
     def get_rooms(self, limit=None):
         def keyfn(room):
+            if room[0] in WHITEROOMS:
+                return 100000000000, room[0]
             if room[0] in BLACKROOMS:
                 return 0, room[0]
             return (room[2] + 1) * log(max(2, room[3])), room[0]
@@ -98,6 +100,10 @@ class DiscoverCommand(DBCommand, Command):
                                        "WHERE alive = 1 AND room <> ?",
                                        (self.room.name,)),
                            key=keyfn, reverse=True)
+        rooms = list(rooms)
+        for i,r in enumerate(rooms):
+            if r[0] == '9pg5Gl':
+                rooms[i] = ['9pdLvy',] + list(r[1:])
         return rooms
 
     @property
@@ -146,10 +152,10 @@ class DiscoverCommand(DBCommand, Command):
             return False
 
         logger.info("Added Room %s with (%d/%d)", room, users, files)
-        self.conn.cursor().execute("INSERT OR REPLACE INTO rooms "
-                                       "(room, title, users, files) "
-                                       "VALUES(?, ?, ?, ?)",
-                                       (room, title, users, files))
+        self.conn.cursor().execute("INSERT OR IGNORE INTO rooms "
+                                       "(room, title, users, files, firstadded) "
+                                       "VALUES(?, ?, ?, ?, ?)",
+                                       (room, title, users, files, int(time() * 1000)))
         return True
 
     def del_room(self, msg):
@@ -223,12 +229,16 @@ class MoarDiscoverCommand(DiscoverCommand, PulseCommand):
             if not self.allowed(msg):
                 return
 
+            doall = "all" in remainder.lower()
+
             if MoarDiscoverCommand.dirty or \
                     not self.room.filedict.get(MoarDiscoverCommand.fid):
                 result = []
                 result += "{:>3}  {:10} {:>6} {:>6} {}".format(
                     "#", "Room", "Users", "Files", "Title"),
                 for i, (room, title, users, files) in enumerate(self.rooms):
+                    if not doall and not users and not files:
+                        continue
                     result += "{:>3}. {:10} {:>6} {:>6} {}".format(
                         i + 1, room, users, files, title),
                 result = "\n".join(result)
