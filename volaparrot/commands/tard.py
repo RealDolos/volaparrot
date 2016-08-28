@@ -28,13 +28,21 @@ import random
 import re
 
 from subprocess import Popen, PIPE
+from sqlite3 import Connection
 
 from lru import LRU
 
 from .command import Command
 
 
-__all__ = ["EightballCommand", "RevolverCommand", "DiceCommand", "ChenCommand", "XDanielCommand"]
+__all__ = [
+    "EightballCommand",
+    "RevolverCommand",
+    "DiceCommand",
+    "ChenCommand",
+    "XDanielCommand",
+    "RedardCommand",
+    ]
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +210,25 @@ class ProfanityCommand(Command):
             logger.exception("failed to analyze")
             return False
 
+class RedardCommand(Command):
+    redard = re.compile(r"\bredard\b", re.I)
+    db = Connection("merc.db", isolation_level=None)
+
+    def handles(self, cmd):
+        return bool(cmd)
+
+    def __call__(self, cmd, remainder, msg):
+        if not self.allowed(msg):
+            return False
+        if not self.redard.search(msg.msg):
+            return False
+        cur = self.db.cursor()
+        cur.execute("SELECT msg FROM red ORDER BY RANDOM() LIMIT 1")
+        quote = cur.fetchone()
+        if not quote:
+            return False
+        self.post(">Red: {}", quote[0])
+        return True
 
 try:
     if "profane" not in "".join(ProfanityCommand.alex("you're a gay")):

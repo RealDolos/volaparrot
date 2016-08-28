@@ -28,6 +28,7 @@ import inspect
 import logging
 
 from time import time
+from sqlite3 import Connection
 
 from .constants import *
 from .commands import *
@@ -36,6 +37,10 @@ from .commands import *
 __all__ = ["ChatHandler"]
 
 logger = logging.getLogger(__name__)
+
+mercdb = Connection("merc.db", isolation_level=None)
+mercdb.cursor().execute("CREATE TABLE IF NOT EXISTS merc (ts INT PRIMARY KEY, msg TEXT)")
+mercdb.cursor().execute("CREATE TABLE IF NOT EXISTS red (ts INT PRIMARY KEY, msg TEXT)")
 
 
 class ChatHandler:
@@ -68,8 +73,8 @@ class ChatHandler:
             except Exception:
                 logger.exception("Failed to initialize handler %s", str(cand))
 
-        def sort(a):
-            return a.__class__.__name__
+        def sort(cls):
+            return cls.__class__.__name__
 
         self.handlers = sorted(handlers, key=sort)
         self.file_handlers = sorted(file_handlers, key=sort)
@@ -82,16 +87,26 @@ class ChatHandler:
              ", ".join(repr(h) for h in self.pulse_handlers))
 
     def __call__(self, msg):
-        logger.info(msg)
+        logger.info("%s %s", self.room.name, msg)
         if msg.nick == self.room.user.name:
             return
         if msg.nick == "MOTD" and msg.admin:
             return
         lnick = msg.nick.casefold()
+        if (lnick == "mercwmouth" and msg.admin) or (lnick == "deadpool" and msg.logged_in):
+            mercdb.cursor().execute(
+                "INSERT OR IGNORE INTO merc VALUES (?, ?)",
+                (int(time() * 10), msg.msg))
+        elif lnick == "red" and msg.admin:
+            mercdb.cursor().execute(
+                "INSERT OR IGNORE INTO red VALUES (?, ?)",
+                (int(time() * 10), msg.msg))
         if any(i in lnick for i in BLACKFAGS):
+            if self.room.name == "2gXrAj" and msg.nick.casefold() == "counselor".casefold():
+                self.room.post_chat("^ Counselor is a hobo pede")
             return
-        isObama = any(i in lnick for i in OBAMAS)
-        if isObama and self.obamas.get(lnick, 0) + 600 > time():
+        is_obama = any(i in lnick for i in OBAMAS)
+        if is_obama and self.obamas.get(lnick, 0) + 600 > time():
             logger.info("Ignored Obama %s", lnick)
             return
 
@@ -103,7 +118,7 @@ class ChatHandler:
         for handler in self.handlers:
             try:
                 if handler.handles(cmd) and handler(cmd, remainder, msg):
-                    if isObama:
+                    if is_obama:
                         self.obamas[lnick] = time()
                     return
             except Exception:
