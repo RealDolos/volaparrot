@@ -185,7 +185,12 @@ class SeenCommand(DBCommand, PulseCommand):
             logger.exception("Failed to update seen")
 
     def __call__(self, cmd, remainder, msg):
-        self.seen[self.mapname(msg.nick).casefold()] = time()
+        nick = self.mapname(msg.nick).casefold()
+        self.seen[nick] = time()
+        if msg.admin:
+            self.seen["@{}".format(nick)] = time()
+        if msg.logged_in:
+            self.seen["+{}".format(nick)] = time()
         if cmd != "!seen":
             return False
 
