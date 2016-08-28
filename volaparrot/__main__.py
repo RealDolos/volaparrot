@@ -26,6 +26,7 @@ THE SOFTWARE.
 
 import sys
 import codecs
+import time
 
 # Windows is best OS
 if sys.stdout.encoding.casefold() != "utf-8".casefold():
@@ -157,6 +158,7 @@ def setup_room(room, args):
             logger.exception("Failed to login")
             if not args.softlogin:
                 return 1
+            args.passwd = None
     handler = ChatHandler(room, args)
 
     # XXX Handle elsewhere
@@ -254,10 +256,18 @@ def main():
     try:
         with ExitStack() as stack:
             rooms = list()
-            for room in args.rooms:
-                room = stack.enter_context(Room(room, args.parrot))
-                setup_room(room, args)
-                rooms += room,
+            room0 = None
+            for r in args.rooms:
+                try:
+                    room = stack.enter_context(Room(r, args.parrot, other=room0))
+                    if not room0:
+                        room0 = room
+                    setup_room(room, args)
+                    rooms += room,
+                    time.sleep(0.5)
+                except:
+                    logger.error("Failed to connect to room %s", r)
+                    raise
             logger.info("%s listening...", __fulltitle__)
             listen_many(*rooms)
     except Exception:
