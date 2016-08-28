@@ -102,7 +102,10 @@ class WebCommand(Command):
         if string:
             string = html.unescape(string.strip())
             # shit is double escaped quite often
-            string = string.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&amp;", "&")
+            string = string.replace("&lt;", "<").\
+                replace("&gt;", ">").\
+                replace("&quot;", '"').\
+                replace("&amp;", "&")
             string = re.sub(r"[\s+\n]+", " ", string.replace("\r\n", "\n"))
         return string
 
