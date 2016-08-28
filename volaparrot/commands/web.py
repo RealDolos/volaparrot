@@ -129,9 +129,7 @@ class XYoutuberCommand(WebCommand):
         if "mmortal" in msg.nick.lower():
             title += " (probably some shit music only a retard would like)"
 
-        if "liquid" in msg.nick.lower():
-            self.post("{}: YouNow links are not allowed, you pedo", msg.nick)
-        elif duration and desc and msg.nick.lower() not in ("dongmaster", "doc"):
+        if duration and desc and msg.nick.lower() not in ("dongmaster", "doc"):
             self.post("YouTube: {} ({})\n{}", title, duration, desc)
         elif duration:
             self.post("YouTube: {} ({})", title, duration)

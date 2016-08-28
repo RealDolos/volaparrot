@@ -70,9 +70,6 @@ class EightballCommand(Command):
         if not remainder.strip():
             self.post("{}: You're a faggot!", msg.nick)
             return True
-        if msg.nick.lower() == "liquid":
-            self.post("{}: You're a cuck!", msg.nick)
-            return True
         if "mod" in remainder.lower():
             self.post("{}:The only true mod is VolaMerc 2.0!", msg.nick)
             return True

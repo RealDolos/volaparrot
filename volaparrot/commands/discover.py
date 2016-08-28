@@ -70,8 +70,11 @@ class DiscoverCommand(DBCommand, Command):
             remainder = None
         nick = remainder or msg.nick
 
-        if msg.nick.lower() == "liquid":
-            self.post("{}, volafile does not support cucking or CP! No rooms for you!", msg.nick)
+        if not self.allowed(msg):
+            if self.room.name == "6y4jry":
+                self.post("{}, drumpie told me to disable this functionality in his room. -- RD", msg.nick)
+            else:
+                self.post("{}, your mom says to clean up your own room first before you can haz more rooms!", msg.nick)
             return True
 
         self.post("{}: {}", nick, self.make(295 - len(nick), limit))
