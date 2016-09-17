@@ -182,8 +182,9 @@ class MoarDiscoverCommand(DiscoverCommand, PulseCommand):
     dirty = True
     fid = 0
 
-    interval = 240
+    interval = 180
     last_check = 0
+    refresh_rooms = []
 
     def handles(self, cmd):
         return bool(cmd)
@@ -195,10 +196,14 @@ class MoarDiscoverCommand(DiscoverCommand, PulseCommand):
 
         logger.debug("refreshing")
         try:
-            cur = self.conn.cursor()
-            rooms = cur.execute("SELECT room FROM rooms WHERE alive <> 2 "
-                                "ORDER BY RANDOM() LIMIT 5").fetchall()
+            if not self.refresh_rooms:
+                cur = self.conn.cursor()
+                self.refresh_rooms = cur.execute("SELECT room FROM rooms WHERE alive <> 2 "
+                                    "ORDER BY users DESC, files DESC").fetchall()
+            rooms = self.refresh_rooms[:5]
+            del self.refresh_rooms[:5]
             for (room,) in rooms:
+                cur = self.conn.cursor()
                 try:
                     title, users, files, disabled = roomstat(room)
                     if disabled:
