@@ -112,7 +112,7 @@ def parse_args():
                         type=str, default=config("admins", split=" ") or ADMINFAG,
                         help="Admin user name(s)")
     parser.add_argument("--ded", "-d", action="store_true",
-                        help="Initially !ded")
+                        help="Initially .ded")
     parser.add_argument("--shitposting", action="store_true",
                         help="Let it commence")
     parser.add_argument("--greenmasterrace", action="store_true",
@@ -120,13 +120,20 @@ def parse_args():
     parser.add_argument("--passwd", default=config("passwd"),
                         type=str,
                         help="Greenfag yerself")
-    parser.add_argument("--no-parrot", dest="noparrot", action="store_true")
-    parser.add_argument("--uploads", dest="uploads", action="store_true")
-    parser.add_argument("--exif", dest="exif", action="store_true")
-    parser.add_argument("--debug", dest="debug", action="store_true")
-    parser.add_argument("--softlogin", dest="softlogin", action="store_true")
-    parser.add_argument("--rooms", dest="feedrooms", type=str, default=None)
-    parser.add_argument("--bind", dest="bind", type=str, default=config("bind"))
+    parser.add_argument("--no-parrot", dest="noparrot", action="store_true",
+                        help="Does not actually parrot")
+    parser.add_argument("--uploads", dest="uploads", action="store_true",
+                        help="Enable upload commands")
+    parser.add_argument("--exif", dest="exif", action="store_true",
+                        help="Enable exif bot")
+    parser.add_argument("--debug", dest="debug", action="store_true",
+                        help="Ignore unless you are dongmaster")
+    parser.add_argument("--softlogin", dest="softlogin", action="store_true",
+                        help="Allow to continue if login fails (bot will be a whitename)")
+    parser.add_argument("--rooms", dest="feedrooms", type=str, default=None,
+                        help="Feed the parrot some initial rooms for !discover")
+    parser.add_argument("--bind", dest="bind", type=str, default=config("bind"),
+                        help="interface to bind to")
     parser.add_argument("rooms", default=config("rooms", split=" "),
                         type=str, nargs="*",
                         help="Rooms to fuck up")
