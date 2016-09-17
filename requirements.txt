@@ -6,3 +6,4 @@ ExifRead
 path.py
 lru-dict
 humanize
+win-unicode-console
