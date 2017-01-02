@@ -102,8 +102,8 @@ class ChatHandler:
                 "INSERT OR IGNORE INTO red VALUES (?, ?)",
                 (int(time() * 10), msg.msg))
         if any(i in lnick for i in BLACKFAGS):
-            if self.room.name == "2gXrAj" and msg.nick.casefold() == "counselor".casefold():
-                self.room.post_chat("^ Counselor is a hobo pede")
+            return
+        if not msg.logged_in and any(i in lnick for i in ("dolos", "doios")):
             return
         is_obama = any(i in lnick for i in OBAMAS)
         if is_obama and self.obamas.get(lnick, 0) + 600 > time():
