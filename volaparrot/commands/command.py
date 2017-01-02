@@ -35,54 +35,16 @@ __all__ = ["Command", "FileCommand", "PulseCommand"]
 
 logger = logging.getLogger(__name__)
 
-class Dong:
-    dongs = ["Dong is a homo",
-             "Dong is a refugee",
-             "Dong did not confess",
-             "Dongmaster is the new MercWMouth",
-             "Dong supports loli in /v/",
-             "Dongmaster is cancer",
-             "This notifies Dongmaster",
-             "Dong has 60 OT accounts",
-             "Dongmaster is such a cuck, even Swedes hate him",
-             "Dongmaster eats nigger semen",
-             "Dongmaster drinks buckets of muslim semen",
-             "Dongmaster's mom installed Parental Controls",
-             ]
-
-    def __init__(self):
-        self.cool = 0
-        self.current = None
-
-    def dong(self, msg):
-        if len(msg) > 280:
-            return None
-        now = time()
-        if self.cool + 10*60 > now:
-            return None
-        self.cool = now
-        dong = None
-        try:
-            dong = self.current.pop()
-        except Exception:
-            self.current = self.dongs[:]
-            shuffle(self.current)
-            dong = self.current.pop()
-        return dong
-
 
 class Command:
     _active = True
     shitposting = False
     greens = False
-    dong = Dong()
 
     def __init__(self, room, admins, *args, **kw):
         args, kw = kw, args
         self.room = room
         self.mute = False
-        #if not hasattr(self.room, "dong"):
-        #    self.room.dong = Dong()
 
         self.admins = admins
         handlers = getattr(self, "handlers", list())
@@ -106,13 +68,7 @@ class Command:
         cls._active = value
 
     def post(self, msg, *args, **kw):
-        if self.room.name == "x33JTJR":
-            return
         msg = msg.format(*args, **kw)[:300]
-        #dong = self.room.dong.dong(msg)
-        #if dong:
-        #    msg = msg + "\n" + dong
-        #    msg = msg[:300]
 
         if not self.active:
             logger.info("Swallowed %s", msg)
