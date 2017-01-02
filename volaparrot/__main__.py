@@ -100,6 +100,12 @@ class Config:
 def parse_args():
     import argparse
 
+    if len(sys.argv) > 3:
+        warning = "wombat detected! Make a .parrot.conf already"
+        logger.warning(warning)
+        logger.warning(warning.upper())
+        logger.warning(warning)
+        logger.warning(warning.upper())
     config = Config("parrot")
     parser = argparse.ArgumentParser(
         description=__fulltitle__,
