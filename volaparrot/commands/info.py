@@ -26,6 +26,7 @@ THE SOFTWARE.
 import logging
 
 from time import time
+from datetime import datetime, timedelta
 
 from humanize import naturaldelta
 from lru import LRU
@@ -37,7 +38,7 @@ from .command import Command, PulseCommand
 from .db import DBCommand
 
 
-__all__ = ["NiggersCommand", "ObamasCommand", "CheckModCommand", "AboutCommand", "SeenCommand"]
+__all__ = ["NiggersCommand", "ObamasCommand", "CheckModCommand", "AboutCommand", "SeenCommand", "AsleepCommand"]
 
 logger = logging.getLogger(__name__)
 
@@ -223,4 +224,27 @@ class SeenCommand(DBCommand, PulseCommand):
             self.post("I have not seen {} since {}", remainder, naturaldelta(time() - self.start))
         else:
             self.post("{} was last seen {} ago", remainder, naturaldelta(time() - seen))
+        return True
+
+
+class AsleepCommand(Command):
+    last = None
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+
+    def handles(self, cmd):
+        return True
+
+    def __call__(self, cmd, remainder, msg):
+        if msg.admin and msg.logged_in:
+            AsleepCommand.last = datetime.now(), msg.nick
+        if cmd != "!asleep":
+            return False
+
+        if not AsleepCommand.last:
+            self.post("Mods are asleep")
+        elif AsleepCommand.last[0] + timedelta(minutes=20) <= datetime.now():
+            self.post("Mods have been asleep since {}", naturaldelta(AsleepCommand.last[0]))
+        else:
+            self.post("{} was awake and trolling {} ago", AsleepCommand.last[1], naturaldelta(AsleepCommand.last[0]))
         return True
