@@ -21,12 +21,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 # pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
+# pylint: disable=bad-continuation,too-many-lines
 # pylint: disable=wildcard-import,unused-wildcard-import
 
 import inspect
 import logging
 
+from contextlib import suppress
 from importlib import import_module
 from time import time
 from sqlite3 import Connection
@@ -37,47 +38,31 @@ from .commands import *
 
 __all__ = ["ChatHandler"]
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
-mercdb = Connection("merc.db", isolation_level=None)
-mercdb.cursor().execute("CREATE TABLE IF NOT EXISTS merc (ts INT PRIMARY KEY, msg TEXT)")
-mercdb.cursor().execute("CREATE TABLE IF NOT EXISTS red (ts INT PRIMARY KEY, msg TEXT)")
+MERCDB = Connection("merc.db", isolation_level=None)
+MERCDB.cursor().execute("CREATE TABLE IF NOT EXISTS merc (ts INT PRIMARY KEY, msg TEXT)")
+MERCDB.cursor().execute("CREATE TABLE IF NOT EXISTS red (ts INT PRIMARY KEY, msg TEXT)")
 
 
 class ChatHandler:
     def __init__(self, room, args):
         self.room = room
-        self.BLACKS = args.blacks
-        self.OBAMAS = args.obamas
+        self.blackfags = args.blacks
+        self.obamafags = args.obamas
 
         self.obamas = dict()
 
-        candidates = list()
+        candidates = ChatHandler.load_custom_commands(args)
         for cand in globals().values():
             if not inspect.isclass(cand) or not issubclass(cand, Command) \
                     or cand is Command:
                 continue
             candidates += cand,
 
-        if args.handlers:
-            import sys
-            import os
-            sys.path += os.getcwd(),
-
-        for h in args.handlers:
-            try:
-                mod = import_module(h)
-                for name, cand in mod.__dict__.items():
-                    if not inspect.isclass(cand) or not issubclass(cand, Command) \
-                            or cand is Command:
-                        continue
-                    candidates += cand,
-            except ImportError:
-                logger.exception("Failed to import custom handler")
-
-        handlers = list()
-        file_handlers = list()
-        pulse_handlers = list()
+        commands = list()
+        file_commands = list()
+        pulse_commands = list()
         for cand in candidates:
             if not inspect.isclass(cand) or not issubclass(cand, Command) \
                     or cand is Command:
@@ -92,49 +77,74 @@ class ChatHandler:
                 if cand is PulseCommand or cand is FileCommand or cand is Command:
                     continue
                 inst = cand(room, args.admins, args=args)
-                handlers += inst,
+                commands += inst,
                 if issubclass(cand, FileCommand):
-                    file_handlers += inst,
+                    file_commands += inst,
                 if issubclass(cand, PulseCommand):
-                    pulse_handlers += inst,
+                    pulse_commands += inst,
             except Exception:
-                logger.exception("Failed to initialize handler %s", str(cand))
+                LOGGER.exception("Failed to initialize commands %s", str(cand))
 
         def sort(cls):
             return cls.__class__.__name__
 
-        self.handlers = sorted(handlers, key=sort)
-        self.file_handlers = sorted(file_handlers, key=sort)
-        self.pulse_handlers = sorted(pulse_handlers, key=sort)
-        logger.debug("Initialized handlers %s",
-             ", ".join(repr(h) for h in self.handlers))
-        logger.debug("Initialized file handlers %s",
-             ", ".join(repr(h) for h in self.file_handlers))
-        logger.debug("Initialized pulse handlers %s",
-             ", ".join(repr(h) for h in self.pulse_handlers))
+        self.commands = sorted(commands, key=sort)
+        self.file_commands = sorted(file_commands, key=sort)
+        self.pulse_commands = sorted(pulse_commands, key=sort)
+        LOGGER.debug("Initialized commands %s",
+             ", ".join(repr(h) for h in self.commands))
+        LOGGER.debug("Initialized file commands %s",
+             ", ".join(repr(h) for h in self.file_commands))
+        LOGGER.debug("Initialized pulse commands %s",
+             ", ".join(repr(h) for h in self.pulse_commands))
 
-    def __call__(self, msg):
-        logger.info("%s %s", self.room.name, msg)
-        if msg.nick == self.room.user.name:
-            return
-        if msg.nick == "MOTD" and msg.admin:
-            return
-        lnick = msg.nick.casefold()
+    @staticmethod
+    def load_custom_commands(args):
+        if args.commands:
+            import sys
+            import os
+            sys.path += os.getcwd(),
+
+        candidates = list()
+        for cmd in args.commands:
+            try:
+                mod = import_module(cmd)
+                for cand in mod.__dict__.values():
+                    if not inspect.isclass(cand) or not issubclass(cand, Command) \
+                            or cand is Command:
+                        continue
+                    candidates += cand,
+            except ImportError:
+                LOGGER.exception("Failed to import custom command")
+        return candidates
+
+
+    @staticmethod
+    def maybe_log(msg, lnick):
         if (lnick == "mercwmouth" and msg.admin) or (lnick == "deadpool" and msg.logged_in):
-            mercdb.cursor().execute(
+            MERCDB.cursor().execute(
                 "INSERT OR IGNORE INTO merc VALUES (?, ?)",
                 (int(time() * 10), msg.msg))
         elif lnick == "red" and msg.admin:
-            mercdb.cursor().execute(
+            MERCDB.cursor().execute(
                 "INSERT OR IGNORE INTO red VALUES (?, ?)",
                 (int(time() * 10), msg.msg))
-        if any(i in lnick for i in self.BLACKS):
+
+    def __call__(self, msg):
+        LOGGER.info("%s %s", self.room.name, msg)
+        if msg.nick == self.room.user.name or msg.nick == "MOTD":
+            return
+
+        lnick = msg.nick.casefold()
+        with suppress(IOError):
+            ChatHandler.maybe_log(msg, lnick)
+        if any(i in lnick for i in self.blackfags):
             return
         if not msg.logged_in and any(i in lnick for i in ("dolos", "doios")):
             return
-        is_obama = any(i in lnick for i in self.OBAMAS)
+        is_obama = any(i in lnick for i in self.obamafags)
         if is_obama and self.obamas.get(lnick, 0) + 600 > time():
-            logger.info("Ignored Obama %s", lnick)
+            LOGGER.info("Ignored Obama %s", lnick)
             return
 
         cmd = msg.msg.split(" ", 1)
@@ -142,43 +152,41 @@ class ChatHandler:
                           cmd[1].strip() if len(cmd) == 2 else "")
         if not cmd:
             return
-        for handler in self.handlers:
+        for command in self.commands:
             try:
-                if handler.handles(cmd) and handler(cmd, remainder, msg):
+                if command.handles(cmd) and command(cmd, remainder, msg):
                     if is_obama:
                         self.obamas[lnick] = time()
                     return
             except Exception:
-                logger.exception("Failed to procss command %s with handler %s",
-                      cmd, repr(handler))
+                LOGGER.exception("Failed to procss command %s with command %s",
+                      cmd, repr(command))
 
     def __call_file__(self, file):
-        for handler in self.file_handlers:
+        for command in self.file_commands:
             try:
-                if handler.onfile(file):
+                if command.onfile(file):
                     return
             except Exception:
-                logger.exception("Failed to procss command %s with handler %s",
-                      file, repr(handler))
+                LOGGER.exception("Failed to procss command %s with command %s",
+                      file, repr(command))
 
     def __call_pulse__(self, current):
-        logger.debug("got a pulse: %d", current)
-        for handler in self.pulse_handlers:
+        LOGGER.debug("got a pulse: %d", current)
+        for command in self.pulse_commands:
             try:
-                if not handler.check_interval(current, handler.interval):
+                if not command.check_interval(current, command.interval):
                     continue
-                if handler.onpulse(current):
+                if command.onpulse(current):
                     return
             except Exception:
-                logger.exception("Failed to procss command %s with handler %s",
-                      time, repr(handler))
+                LOGGER.exception("Failed to procss command %s with command %s",
+                      time, repr(command))
 
     def __call_call__(self, item):
-        callback, args, kw = item
+        callback, args, kwargs = item
         try:
-            callback(*args, **kw)
+            callback(*args, **kwargs)
         except Exception:
-            logger.exception("Failed to process callback with %r (%r, **%r)",
-                callback, args, kw)
-
-
+            LOGGER.exception("Failed to process callback with %r (%r, **%r)",
+                callback, args, kwargs)

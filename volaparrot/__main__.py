@@ -155,9 +155,9 @@ def parse_args():
     parser.add_argument("--ignoredrooms", default=config("ignoredrooms", split=" "),
                         type=str, nargs="*",
                         help="Rooms to completely ignore (in discover)")
-    parser.add_argument("--handlers", default=config("handlers", split=" "),
+    parser.add_argument("--commands", default=config("commands", split=" "),
                         type=str, nargs="*",
-                        help="More handler to use")
+                        help="More commands to use")
     parser.add_argument("rooms", default=config("rooms", split=" "),
                         type=str, nargs="*",
                         help="Rooms to fuck up")
@@ -214,12 +214,12 @@ def setup_room(room, args):
         args.feedrooms = None
 
     # Wire up listeners
-    if handler.handlers:
+    if handler.commands:
         room.add_listener("chat", handler)
-    if handler.file_handlers:
+    if handler.file_commands:
         room.add_listener("file", handler.__call_file__)
-    if handler.pulse_handlers:
-        mininterval = min(h.interval for h in handler.pulse_handlers)
+    if handler.pulse_commands:
+        mininterval = min(h.interval for h in handler.pulse_commands)
         room.add_listener("pulse", handler.__call_pulse__)
         ARBITRATOR.start_pulse(room, mininterval)
         logger.debug("installed pulse with interval %f", mininterval)
