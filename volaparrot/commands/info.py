@@ -79,19 +79,28 @@ class CheckModCommand(Command):
             if "Error 404" in text:
                 logger.info("Not a user %s", user)
                 return False
-            i = get_json("https://volafile.io/rest/getUserInfo?name={}".format(user))
+            i = self.room.conn.make_api_call("getUserInfo", params=dict(name=user))
             if i.get("staff"):
-                if user.lower() in ("kalyx", "mercwmouth", "davinci", "liquid"):
-                    self.post("Yes, unfortunately the fag {} is still a staffer", user)
+                if user.lower() in ("mercwmouth",):
+                    self.post("Yes, unfortunately the literally brown pajeet hitler and pretend lawyer {} is still a marginally trusted user", user)
+                elif user.lower() in ("kalyx", "mercwmouth", "davinci", "liquid"):
+                    self.post("Yes, unfortunately the fag {} is still a marginally trusted user", user)
                 else:
-                    self.post("Yes, {} is still a staffer", user)
+                    self.post("Yes, {} is still a marginally trusted user", user)
+            elif i.get("admin"):
+                if user.lower() in ("kalyx", "mercwmouth", "davinci", "liquid"):
+                    self.post("Yes, unfortunately the fag {} is still a mod", user)
+                elif user.lower() == "ptc":
+                    self.post("Sweet jewprince is well and alive, unlike Yahoo!")
+                else:
+                    self.post("Yes, {} is still a mod", user)
             else:
                 if user.lower() == "ptc":
                     self.post("Rest in pieces, sweet jewprince")
                 elif user.lower() == "liquid":
                     self.post("pls, Liquid will never be a mod")
                 else:
-                    self.post("{} is not a staffer".format(user))
+                    self.post("{} is not trusted, at all!".format(user))
             return True
         except Exception:
             logger.exception("huh?")
@@ -149,7 +158,9 @@ class SeenCommand(DBCommand, PulseCommand):
       "CuckDolos": "Ian",
       "DolosCuck": "Ian",
       "apha": "Polish plebbit pedo",
+      "wombatfucker": "NEPTVola",
       }
+
 
     def mapname(self, name):
         if name.startswith("Xsa"):
@@ -187,7 +198,7 @@ class SeenCommand(DBCommand, PulseCommand):
     def __call__(self, cmd, remainder, msg):
         nick = self.mapname(msg.nick).casefold()
         self.seen[nick] = time()
-        if msg.admin:
+        if msg.admin or msg.staff:
             self.seen["@{}".format(nick)] = time()
         if msg.logged_in:
             self.seen["+{}".format(nick)] = time()
