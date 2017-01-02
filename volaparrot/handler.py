@@ -64,7 +64,7 @@ class ChatHandler:
             try:
                 if cand is PulseCommand or cand is FileCommand or cand is Command:
                     continue
-                inst = cand(room, args.admins)
+                inst = cand(room, args.admins, args=args)
                 handlers += inst,
                 if issubclass(cand, FileCommand):
                     file_handlers += inst,

@@ -49,6 +49,7 @@ class DiscoverCommand(DBCommand, Command):
     handlers = "!addroom", "!delroom", "!discover", "!room", "!dickover"
 
     def __init__(self, *args, **kw):
+        self.ignoredrooms = kw.get("args").ignoredrooms
         super().__init__(*args, **kw)
 
     def __call__(self, cmd, remainder, msg):
@@ -142,6 +143,9 @@ class DiscoverCommand(DBCommand, Command):
     def add_one_room(self, room, known):
         if room.startswith("#"):
             room = room[1:]
+        if room in self.ignoredrooms:
+            logger.debug("Room %s ignored", room)
+            return False
         if room in list(r[0] for r in known):
             logger.debug("Room %s already known", room)
             return False

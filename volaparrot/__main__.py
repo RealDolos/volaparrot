@@ -140,6 +140,9 @@ def parse_args():
                         help="Feed the parrot some initial rooms for !discover")
     parser.add_argument("--bind", dest="bind", type=str, default=config("bind"),
                         help="interface to bind to")
+    parser.add_argument("--ignoredrooms", default=config("ignoredrooms", split=" "),
+                        type=str, nargs="*",
+                        help="Rooms to completely ignore (in discover)")
     parser.add_argument("rooms", default=config("rooms", split=" "),
                         type=str, nargs="*",
                         help="Rooms to fuck up")
