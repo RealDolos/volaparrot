@@ -33,7 +33,6 @@ from volapi import Room
 
 from .command import Command, PulseCommand
 from .db import DBCommand
-from ..constants import BLACKROOMS, WHITEROOMS
 from ..roomstat import roomstat
 
 
@@ -49,7 +48,10 @@ class DiscoverCommand(DBCommand, Command):
     handlers = "!addroom", "!delroom", "!discover", "!room", "!dickover"
 
     def __init__(self, *args, **kw):
-        self.ignoredrooms = kw.get("args").ignoredrooms
+        opts = kw.get("args")
+        self.ignoredrooms = opts.ignoredrooms
+        self.blackrooms = opts.blackrooms
+        self.whiterooms = opts.whiterooms
         super().__init__(*args, **kw)
 
     def __call__(self, cmd, remainder, msg):
@@ -86,9 +88,9 @@ class DiscoverCommand(DBCommand, Command):
 
     def get_rooms(self, limit=None):
         def keyfn(room):
-            if room[0] in WHITEROOMS:
+            if room[0] in self.whiterooms:
                 return 100000000000, room[0]
-            if room[0] in BLACKROOMS:
+            if room[0] in self.blackrooms:
                 return 0, room[0]
             return (room[2] + 1) * log(max(2, room[3])), room[0]
 

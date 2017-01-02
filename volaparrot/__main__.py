@@ -140,6 +140,18 @@ def parse_args():
                         help="Feed the parrot some initial rooms for !discover")
     parser.add_argument("--bind", dest="bind", type=str, default=config("bind"),
                         help="interface to bind to")
+    parser.add_argument("--blacks", default=config("blacks", split=" "),
+                        type=str, nargs="*",
+                        help="Users to ignore")
+    parser.add_argument("--obamas", default=config("obamas", split=" "),
+                        type=str, nargs="*",
+                        help="Users to obama")
+    parser.add_argument("--whiterooms", default=config("whiterooms", split=" "),
+                        type=str, nargs="*",
+                        help="Rooms to sanction")
+    parser.add_argument("--blackrooms", default=config("blackrooms", split=" "),
+                        type=str, nargs="*",
+                        help="Rooms to downgrade")
     parser.add_argument("--ignoredrooms", default=config("ignoredrooms", split=" "),
                         type=str, nargs="*",
                         help="Rooms to completely ignore (in discover)")
@@ -162,6 +174,8 @@ def parse_args():
     rv =  parser.parse_args()
     if not rv.rooms:
         parser.error("Provide rooms, you cuck!")
+    rv.blacks = [i.casefold() for i in rv.blacks]
+    rv.obamas = [i.casefold() for i in rv.obamas]
     return rv
 
 

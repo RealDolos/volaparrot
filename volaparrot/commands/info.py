@@ -31,7 +31,6 @@ from datetime import datetime, timedelta
 from humanize import naturaldelta
 from lru import LRU
 
-from ..constants import *
 from .._version import *
 from ..utils import get_text, get_json
 from .command import Command, PulseCommand
@@ -45,22 +44,32 @@ logger = logging.getLogger(__name__)
 
 class NiggersCommand(Command):
     handlers = "!niggers"
+
+    def __init__(self, *args, **kw):
+        self.blacks = kw.get("args").blacks
+        super().__init__(*args, **kw)
+
     def __call__(self, cmd, remainder, msg):
         if not self.allowed(msg):
             return False
         self.post("{}, the following black gentlemen cannot use this bot: {}",
-                  msg.nick, ", ".join(BLACKFAGS))
+                  msg.nick, ", ".join(self.blacks))
         return True
 
 
 class ObamasCommand(Command):
     handlers = "!obamas"
+
+    def __init__(self, *args, **kw):
+        self.obamas = kw.get("args").obamas
+        super().__init__(*args, **kw)
+
     def __call__(self, cmd, remainder, msg):
         if not self.allowed(msg):
             return False
         self.post("{}, the following half-black gentlemen can only use this bot "
                   "once every couple of minutes: {}",
-                  msg.nick, ", ".join(OBAMAS))
+                  msg.nick, ", ".join(self.obamas))
         return True
 
 

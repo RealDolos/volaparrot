@@ -47,6 +47,9 @@ mercdb.cursor().execute("CREATE TABLE IF NOT EXISTS red (ts INT PRIMARY KEY, msg
 class ChatHandler:
     def __init__(self, room, args):
         self.room = room
+        self.BLACKS = args.blacks
+        self.OBAMAS = args.obamas
+
         self.obamas = dict()
 
         candidates = list()
@@ -125,11 +128,11 @@ class ChatHandler:
             mercdb.cursor().execute(
                 "INSERT OR IGNORE INTO red VALUES (?, ?)",
                 (int(time() * 10), msg.msg))
-        if any(i in lnick for i in BLACKFAGS):
+        if any(i in lnick for i in self.BLACKS):
             return
         if not msg.logged_in and any(i in lnick for i in ("dolos", "doios")):
             return
-        is_obama = any(i in lnick for i in OBAMAS)
+        is_obama = any(i in lnick for i in self.OBAMAS)
         if is_obama and self.obamas.get(lnick, 0) + 600 > time():
             logger.info("Ignored Obama %s", lnick)
             return
