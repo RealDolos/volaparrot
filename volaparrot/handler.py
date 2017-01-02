@@ -27,6 +27,7 @@ THE SOFTWARE.
 import inspect
 import logging
 
+from importlib import import_module
 from time import time
 from sqlite3 import Connection
 
@@ -48,10 +49,33 @@ class ChatHandler:
         self.room = room
         self.obamas = dict()
 
+        candidates = list()
+        for cand in globals().values():
+            if not inspect.isclass(cand) or not issubclass(cand, Command) \
+                    or cand is Command:
+                continue
+            candidates += cand,
+
+        if args.handlers:
+            import sys
+            import os
+            sys.path += os.getcwd(),
+
+        for h in args.handlers:
+            try:
+                mod = import_module(h)
+                for name, cand in mod.__dict__.items():
+                    if not inspect.isclass(cand) or not issubclass(cand, Command) \
+                            or cand is Command:
+                        continue
+                    candidates += cand,
+            except ImportError:
+                logger.exception("Failed to import custom handler")
+
         handlers = list()
         file_handlers = list()
         pulse_handlers = list()
-        for cand in globals().values():
+        for cand in candidates:
             if not inspect.isclass(cand) or not issubclass(cand, Command) \
                     or cand is Command:
                 continue

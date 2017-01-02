@@ -143,6 +143,9 @@ def parse_args():
     parser.add_argument("--ignoredrooms", default=config("ignoredrooms", split=" "),
                         type=str, nargs="*",
                         help="Rooms to completely ignore (in discover)")
+    parser.add_argument("--handlers", default=config("handlers", split=" "),
+                        type=str, nargs="*",
+                        help="More handler to use")
     parser.add_argument("rooms", default=config("rooms", split=" "),
                         type=str, nargs="*",
                         help="Rooms to fuck up")
