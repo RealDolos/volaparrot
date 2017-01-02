@@ -85,6 +85,8 @@ class Config:
         if rv is None:
             if type is bool:
                 return False
+            if split:
+                return []
             return rv
         if split:
             if type:
