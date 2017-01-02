@@ -72,15 +72,15 @@ class Dong:
 
 
 class Command:
-    active = True
+    _active = True
     shitposting = False
     greens = False
     dong = Dong()
 
-
     def __init__(self, room, admins, *args, **kw):
         args, kw = kw, args
         self.room = room
+        self.mute = False
         #if not hasattr(self.room, "dong"):
         #    self.room.dong = Dong()
 
@@ -92,6 +92,18 @@ class Command:
 
     def handles(self, cmd):
         return cmd in self._handlers
+
+    @property
+    def active(self):
+        return self._active and not self.mute
+
+    @active.setter
+    def set_active(self, value):
+        self._active = value
+
+    @classmethod
+    def set_global_active(cls, value):
+        cls._active = value
 
     def post(self, msg, *args, **kw):
         if self.room.name == "x33JTJR":

@@ -42,8 +42,8 @@ class AdminActivateCommand(Command):
             return True
         if cmd == ".ded":
             self.post("Segmentation fault... core dumped")
-            Command.active = False
+            Command.set_global_active(False)
         else:
-            Command.active = True
+            Command.set_global_active(True)
             self.post("Let the spam commence")
         return True

@@ -254,7 +254,7 @@ def main():
     if args.bind:
         override_socket(args.bind)
 
-    Command.active = not args.ded
+    Command.set_global_active(not args.ded)
     Command.shitposting = args.shitposting
     Command.greens = args.greenmasterrace
 
