@@ -359,3 +359,6 @@ def run():
     except KeyboardInterrupt:
         logger.error("User canceled")
         sys.exit(1)
+
+if __name__ == "__main__":
+    run()
