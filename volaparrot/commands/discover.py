@@ -41,6 +41,9 @@ __all__ = ["DiscoverCommand", "MoarDiscoverCommand"]
 
 logger = logging.getLogger(__name__)
 
+MAX_ROOMS = 7
+MAX_MESSAGE = 295
+
 
 class DiscoverCommand(DBCommand, Command):
     handlers = "!addroom", "!delroom", "!discover", "!room", "!dickover"
@@ -77,7 +80,7 @@ class DiscoverCommand(DBCommand, Command):
                 self.post("{}, your mom says to clean up your own room first before you can haz more rooms!", msg.nick)
             return True
 
-        self.post("{}: {}", nick, self.make(295 - len(nick), limit))
+        self.post("{}: {}", nick, self.make(MAX_MESSAGE - len(nick), limit))
         return True
 
     def get_rooms(self, limit=None):
@@ -113,9 +116,10 @@ class DiscoverCommand(DBCommand, Command):
     def make(self, maxlen, limit):
         rooms = self.get_rooms(limit)
         result = []
-        for room, _, users, files in rooms:
+        for i, (room, _, users, files) in enumerate(rooms):
             cur = "#{} ({}/{})".format(room, users, files)
-            if len(cur) > maxlen:
+            if len(cur) > maxlen or i == MAX_ROOMS:
+                result += " …"
                 break
             result += cur,
             maxlen -= len(cur) + 1
