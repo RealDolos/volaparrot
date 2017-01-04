@@ -26,6 +26,8 @@ THE SOFTWARE.
 
 import inspect
 import logging
+import os
+import sys
 
 from contextlib import suppress
 from importlib import import_module
@@ -35,8 +37,10 @@ from sqlite3 import Connection
 from .constants import *
 from .commands import *
 
+# Stuff cwd into python path
+sys.path += os.getcwd(),
 
-__all__ = ["ChatHandler"]
+__all__ = ["Commands", "ChatHandler"]
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,25 +49,38 @@ MERCDB.cursor().execute("CREATE TABLE IF NOT EXISTS merc (ts INT PRIMARY KEY, ms
 MERCDB.cursor().execute("CREATE TABLE IF NOT EXISTS red (ts INT PRIMARY KEY, msg TEXT)")
 
 
+class Commands(list):
+    def __init__(self, additional):
+        super().__init__()
+        for cmd in additional:
+            try:
+                mod = import_module(cmd)
+                for cand in mod.__dict__.values():
+                    if not inspect.isclass(cand) or not issubclass(cand, Command) \
+                            or cand is Command:
+                        continue
+                    self += cand,
+            except ImportError:
+                LOGGER.exception("Failed to import custom command")
+        for cand in globals().values():
+            if not inspect.isclass(cand) or not issubclass(cand, Command) \
+                    or cand is Command:
+                continue
+            self += cand,
+
+
 class ChatHandler:
-    def __init__(self, room, args):
+    def __init__(self, command_candidates, room, args):
         self.room = room
         self.blackfags = args.blacks
         self.obamafags = args.obamas
 
         self.obamas = dict()
 
-        candidates = ChatHandler.load_custom_commands(args)
-        for cand in globals().values():
-            if not inspect.isclass(cand) or not issubclass(cand, Command) \
-                    or cand is Command:
-                continue
-            candidates += cand,
-
         commands = list()
         file_commands = list()
         pulse_commands = list()
-        for cand in candidates:
+        for cand in command_candidates:
             if not inspect.isclass(cand) or not issubclass(cand, Command) \
                     or cand is Command:
                 continue

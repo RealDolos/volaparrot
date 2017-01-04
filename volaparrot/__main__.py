@@ -45,7 +45,7 @@ from volapi import Room, listen_many
 from .constants import *
 from ._version import *
 from .arb import ARBITRATOR
-from .handler import ChatHandler
+from .handler import ChatHandler, Commands
 from .commands import Command
 
 
@@ -184,7 +184,7 @@ def parse_args():
     return rv
 
 
-def setup_room(room, args):
+def setup_room(room, commands, args):
     # login
     if args.passwd and not room.user.logged_in:
         try:
@@ -195,7 +195,7 @@ def setup_room(room, args):
             if not args.softlogin:
                 return 1
             args.passwd = None
-    handler = ChatHandler(room, args)
+    handler = ChatHandler(commands, room, args)
 
     # XXX Handle elsewhere
     if args.feedrooms:
@@ -290,6 +290,7 @@ def main():
     Command.greens = args.greenmasterrace
 
     try:
+        commands = Commands(args.commands)
         with ExitStack() as stack:
             rooms = list()
             room0 = None
@@ -298,7 +299,7 @@ def main():
                     room = stack.enter_context(Room(r, args.parrot, other=room0))
                     if not room0:
                         room0 = room
-                    setup_room(room, args)
+                    setup_room(room, commands, args)
                     rooms += room,
                     time.sleep(0.5)
                 except:
