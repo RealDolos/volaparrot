@@ -157,6 +157,9 @@ def parse_args():
     parser.add_argument("--ignoredrooms", default=config("ignoredrooms", split=" "),
                         type=str, nargs="*",
                         help="Rooms to completely ignore (in discover)")
+    parser.add_argument("--muterooms", default=config("muterooms", split=" "),
+                        type=str, nargs="*",
+                        help="Rooms to lurk bot not spam")
     parser.add_argument("--commands", default=config("commands", split=" "),
                         type=str, nargs="*",
                         help="More commands to use")

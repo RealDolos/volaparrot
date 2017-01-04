@@ -42,9 +42,8 @@ class Command:
     greens = False
 
     def __init__(self, room, admins, *args, **kw):
-        args, kw = kw, args
         self.room = room
-        self.mute = False
+        self.mute = room.name in kw.get("args").muterooms
 
         self.admins = admins
         handlers = getattr(self, "handlers", list())
