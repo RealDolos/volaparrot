@@ -40,7 +40,7 @@ from .commands import *
 # Stuff cwd into python path
 sys.path += os.getcwd(),
 
-__all__ = ["Commands", "ChatHandler"]
+__all__ = ["Commands", "Handler"]
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class Commands(list):
             self += cand,
 
 
-class ChatHandler:
+class Handler:
     def __init__(self, command_candidates, room, args):
         self.room = room
         self.blackfags = args.blacks
@@ -116,27 +116,6 @@ class ChatHandler:
              ", ".join(repr(h) for h in self.pulse_commands))
 
     @staticmethod
-    def load_custom_commands(args):
-        if args.commands:
-            import sys
-            import os
-            sys.path += os.getcwd(),
-
-        candidates = list()
-        for cmd in args.commands:
-            try:
-                mod = import_module(cmd)
-                for cand in mod.__dict__.values():
-                    if not inspect.isclass(cand) or not issubclass(cand, Command) \
-                            or cand is Command:
-                        continue
-                    candidates += cand,
-            except ImportError:
-                LOGGER.exception("Failed to import custom command")
-        return candidates
-
-
-    @staticmethod
     def maybe_log(msg, lnick):
         if (lnick == "mercwmouth" and msg.admin) or (lnick == "deadpool" and msg.logged_in):
             MERCDB.cursor().execute(
@@ -147,14 +126,14 @@ class ChatHandler:
                 "INSERT OR IGNORE INTO red VALUES (?, ?)",
                 (int(time() * 10), msg.msg))
 
-    def __call__(self, msg):
+    def chat(self, msg):
         LOGGER.info("%s %s", self.room.name, msg)
         if msg.nick == self.room.user.name or msg.nick in ("MOTD", "Reminder"):
             return
 
         lnick = msg.nick.casefold()
         with suppress(IOError):
-            ChatHandler.maybe_log(msg, lnick)
+            Handler.maybe_log(msg, lnick)
         if any(i in lnick for i in self.blackfags):
             return
         if not msg.logged_in and any(i in lnick for i in ("dolos", "doios")):
@@ -179,7 +158,7 @@ class ChatHandler:
                 LOGGER.exception("Failed to procss command %s with command %s",
                       cmd, repr(command))
 
-    def __call_file__(self, file):
+    def file(self, file):
         for command in self.file_commands:
             try:
                 if command.onfile(file):
@@ -188,7 +167,7 @@ class ChatHandler:
                 LOGGER.exception("Failed to procss command %s with command %s",
                       file, repr(command))
 
-    def __call_pulse__(self, current):
+    def pulse(self, current):
         LOGGER.debug("got a pulse: %d", current)
         for command in self.pulse_commands:
             try:
@@ -200,7 +179,8 @@ class ChatHandler:
                 LOGGER.exception("Failed to procss command %s with command %s",
                       time, repr(command))
 
-    def __call_call__(self, item):
+    @staticmethod
+    def call(item):
         callback, args, kwargs = item
         try:
             callback(*args, **kwargs)

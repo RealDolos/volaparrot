@@ -22,7 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 # pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
+# pylint: disable=bad-continuation,too-many-lines,wildcard-import
+# pylint: disable=redefined-variable-type
 
 # Windows is best OS
 try:
@@ -31,21 +32,19 @@ try:
 except ImportError:
     pass
 
+import logging
 import sys
-import codecs
 import time
 
-import logging
-
-from contextlib import ExitStack
+from contextlib import ExitStack, suppress
 
 from path import path
 from volapi import Room, listen_many
 
 from .constants import *
-from ._version import *
+from ._version import __fulltitle__, __version__
 from .arb import ARBITRATOR
-from .handler import ChatHandler, Commands
+from .handler import Handler, Commands
 from .commands import Command
 
 
@@ -58,45 +57,42 @@ class Config:
     curr = dict()
 
     def __init__(self, name):
-        try:
+        with suppress(Exception):
             self.home = self.init_one(path("~/.{}.conf".format(name)).expand(), name)
-        except Exception:
-            pass
-        try:
+        with suppress(Exception):
             self.curr = self.init_one(path("./.{}.conf".format(name)).expand(), name)
-        except Exception:
-            pass
 
-    def init_one(self, loc, sec):
+    @staticmethod
+    def init_one(loc, sec):
         from configparser import ConfigParser
         config = ConfigParser()
         config.read(loc)
         return config[sec]
 
     @staticmethod
-    def typed(type, value):
-        if type is bool:
+    def typed(reqtype, value):
+        if reqtype is bool:
             return str(value).lower().strip() in ("yes", "true", "t", "1", "on")
-        return type(value)
+        return reqtype(value)
 
 
-    def __call__(self, key, default=None, split=None, type=None):
-        rv = self.curr.get(key, self.home.get(key, default))
-        if rv is None:
-            if type is bool:
+    def __call__(self, key, default=None, split=None, reqtype=None):
+        result = self.curr.get(key, self.home.get(key, default))
+        if result is None:
+            if reqtype is bool:
                 return False
             if split:
                 return []
-            return rv
+            return result
         if split:
-            if type:
-                rv = [self.typed(type, i) for i in rv.split(split)]
+            if reqtype:
+                result = [self.typed(reqtype, i) for i in result.split(split)]
             else:
-                rv = rv.split(split)
-            return rv
-        elif type:
-            return self.typed(type, rv)
-        return rv
+                result = result.split(split)
+            return result
+        if reqtype:
+            return self.typed(reqtype, result)
+        return result
 
 
 def parse_args():
@@ -175,13 +171,13 @@ def parse_args():
         "shitposting": False,
         "greenmasterrace": False,
         }
-    parser.set_defaults(**{k: config(k, v, type=bool) for k,v in defaults.items()})
-    rv =  parser.parse_args()
-    if not rv.rooms:
+    parser.set_defaults(**{k: config(k, v, reqtype=bool) for k, v in defaults.items()})
+    result = parser.parse_args()
+    if not result.rooms:
         parser.error("Provide rooms, you cuck!")
-    rv.blacks = [i.casefold() for i in rv.blacks]
-    rv.obamas = [i.casefold() for i in rv.obamas]
-    return rv
+    result.blacks = [i.casefold() for i in result.blacks]
+    result.obamas = [i.casefold() for i in result.obamas]
+    return result
 
 
 def setup_room(room, commands, args):
@@ -195,7 +191,7 @@ def setup_room(room, commands, args):
             if not args.softlogin:
                 return 1
             args.passwd = None
-    handler = ChatHandler(commands, room, args)
+    handler = Handler(commands, room, args)
 
     # XXX Handle elsewhere
     if args.feedrooms:
@@ -215,20 +211,20 @@ def setup_room(room, commands, args):
             class Objectify:
                 def __init__(self, **kw):
                     self.__dict__ = kw
-            handler(Objectify(nick=ADMINFAG[0], rooms=rooms, msg=""))
+            handler.call(Objectify(nick=ADMINFAG[0], rooms=rooms, msg=""))
         args.feedrooms = None
 
     # Wire up listeners
     if handler.commands:
-        room.add_listener("chat", handler)
+        room.add_listener("chat", handler.chat)
     if handler.file_commands:
-        room.add_listener("file", handler.__call_file__)
+        room.add_listener("file", handler.file)
     if handler.pulse_commands:
         mininterval = min(h.interval for h in handler.pulse_commands)
-        room.add_listener("pulse", handler.__call_pulse__)
+        room.add_listener("pulse", handler.pulse)
         ARBITRATOR.start_pulse(room, mininterval)
         logger.debug("installed pulse with interval %f", mininterval)
-    room.add_listener("call", handler.__call_call__)
+    room.add_listener("call", handler.call)
 
 
 def override_socket(bind):
@@ -245,17 +241,13 @@ def override_socket(bind):
             super().__init__(*args, **kw)
 
         def connect(self, address):
-            try:
+            with supress(Exception):
                 self.bind((bind, 0))
-            except Exception:
-                pass
             return super().connect(address)
 
         def connect_ex(self, address):
-            try:
+            with supress(Exception):
                 self.bind((bind, 0))
-            except Exception:
-                pass
             return super().connect_ex(address)
 
         def bind(self, address):
@@ -294,16 +286,16 @@ def main():
         with ExitStack() as stack:
             rooms = list()
             room0 = None
-            for r in args.rooms:
+            for room in args.rooms:
                 try:
-                    room = stack.enter_context(Room(r, args.parrot, other=room0))
+                    room = stack.enter_context(Room(room, args.parrot, other=room0))
                     if not room0:
                         room0 = room
                     setup_room(room, commands, args)
                     rooms += room,
                     time.sleep(0.5)
                 except:
-                    logger.error("Failed to connect to room %s", r)
+                    logger.error("Failed to connect to room %s", room)
                     raise
             logger.info("%s listening...", __fulltitle__)
             listen_many(*rooms)
@@ -314,7 +306,7 @@ def main():
     return 0
 
 
-def debug_handler(sig, frame):
+def debug_handler(_, frame):
     import code
     import traceback
 

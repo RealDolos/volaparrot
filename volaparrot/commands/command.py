@@ -111,4 +111,3 @@ class PulseCommand(Command):
         if result:
             self.last_interval = current
         return result
-
