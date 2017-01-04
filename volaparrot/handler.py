@@ -132,7 +132,7 @@ class ChatHandler:
 
     def __call__(self, msg):
         LOGGER.info("%s %s", self.room.name, msg)
-        if msg.nick == self.room.user.name or msg.nick == "MOTD":
+        if msg.nick == self.room.user.name or msg.nick in ("MOTD", "Reminder"):
             return
 
         lnick = msg.nick.casefold()
