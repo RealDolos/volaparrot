@@ -19,7 +19,7 @@ setup(
     license="MIT",
     author="RealDolos",
     author_email="dolos@cock.li",
-    packages=['volaparrot', 'volaparrot.commands'],
+    packages=['volaparrot', 'volaparrot.commands', 'volaparrot.extracommands'],
     include_package_data=True,
     entry_points={"console_scripts": ["volaparrot = volaparrot.__main__:run"]},
     classifiers=[

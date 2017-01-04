@@ -20,8 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
 
 import logging
 
@@ -33,13 +31,13 @@ from uuid import uuid4
 from path import path
 
 from ..utils import requests
-from .command import Command
-from .db import DBCommand
+from ..commands.command import Command
+from ..commands.db import DBCommand
 
 
 __all__ = ["UploadDownloadCommand"]
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 class UploadDownloadCommand(DBCommand, Command):
@@ -58,9 +56,10 @@ class UploadDownloadCommand(DBCommand, Command):
         if not phrase:
             return None
         cur = self.conn.cursor()
-        res = cur.execute("SELECT phrase, id, name, locked, owner FROM files "
-                             "WHERE phrase = ?",
-                             (phrase,)).fetchone()
+        res = cur.execute(
+            "SELECT phrase, id, name, locked, owner FROM files "
+            "WHERE phrase = ?",
+            (phrase,)).fetchone()
         return self.to_file(res) if res else res
 
     def set_file(self, phrase, name, content, locked, owner):
@@ -80,9 +79,9 @@ class UploadDownloadCommand(DBCommand, Command):
                         "VALUES(?, ?, ?, ?, ?)",
                         (phrase, newid, name, locked, owner))
             UploadDownloadCommand.changed = time()
-            logger.debug("changed %d", self.changed)
+            LOGGER.debug("changed %d", self.changed)
         except Exception:
-            logger.exception("Failed to add file")
+            LOGGER.exception("Failed to add file")
             try:
                 if not newid:
                     raise Exception("huh?")
@@ -107,7 +106,7 @@ class UploadDownloadCommand(DBCommand, Command):
             try:
                 file.unlink()
             except Exception:
-                logger.exception("Failed to delete %s", file)
+                LOGGER.exception("Failed to delete %s", file)
 
     handlers = "!upload", "!download", "!delfile", "!unlockfile", "!files"
 
@@ -121,21 +120,21 @@ class UploadDownloadCommand(DBCommand, Command):
         remainder = list(i.strip() for i in remainder.split(" ", 1))
         phrase = remainder.pop(0)
         remainder = remainder[0] if remainder else ""
-        logger.debug("upload: %s %s", phrase, remainder)
+        LOGGER.debug("upload: %s %s", phrase, remainder)
         file = self.get_file(phrase)
-        logger.debug("upload: %s", file)
+        LOGGER.debug("upload: %s", file)
         if not file:
             return False
         fid = self.workingset.get(file.id, None)
-        logger.debug("upload: %s", fid)
+        LOGGER.debug("upload: %s", fid)
         fileobj = None
         try:
             fileobj = self.room.filedict[fid]
         except KeyError:
-            logger.debug("upload: not found")
+            LOGGER.debug("upload: not found")
 
         if not fileobj:
-            logger.debug("upload: not present")
+            LOGGER.debug("upload: not present")
             with open(file.id, "rb") as filep:
                 fid = self.room.upload_file(filep, upload_as=file.name)
             self.workingset[file.id] = fid
@@ -147,9 +146,9 @@ class UploadDownloadCommand(DBCommand, Command):
             return False
 
         fid, phrase = list(i.strip() for i in remainder.split(" ", 1))
-        logger.debug("download: %s %s", fid, phrase)
+        LOGGER.debug("download: %s %s", fid, phrase)
         if not fid or not phrase or " " in phrase:
-            logger.debug("download: kill %s %s", fid, phrase)
+            LOGGER.debug("download: kill %s %s", fid, phrase)
             return False
 
         admin = self.isadmin(msg)
@@ -164,7 +163,7 @@ class UploadDownloadCommand(DBCommand, Command):
             self.post("My tiny ahole cannot take such a huge cock, {}", msg.nick)
             return False
 
-        logger.info("download: inserting file %s", file)
+        LOGGER.info("download: inserting file %s", file)
         self.set_file(phrase, file.name, requests.get(file.url, stream=True).raw, admin, msg.nick)
 
         if existing:
@@ -198,7 +197,7 @@ class UploadDownloadCommand(DBCommand, Command):
         if valid:
             valid = {f.id: f for f in self.room.files}.get(valid)
             valid = valid and not valid.expired
-        logger.debug("valid %s %d", valid, self.uploaded)
+        LOGGER.debug("valid %s %d", valid, self.uploaded)
         if not self.upload or self.uploaded < self.changed:
             cur = self.conn.cursor()
             phrases = "\r\n".join("{}|{}".format(*row)

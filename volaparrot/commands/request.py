@@ -20,11 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
-
-import logging
-
+# pylint: disable=unused-argument
 from datetime import datetime
 from io import BytesIO
 from time import time
@@ -36,15 +32,13 @@ from .command import Command
 
 __all__ = ["RequestCommand"]
 
-logger = logging.getLogger(__name__)
-
 
 class RequestCommand(Command):
     handlers = "!request"
     cooldown = LRU(20)
     timeout = 1*60*60
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_request(self, cmd, remainder, msg):
         if not self.active:
             return False
         if self.cooldown.get(msg.nick.lower(), 0) + self.timeout > time():

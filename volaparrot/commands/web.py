@@ -20,8 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
 
 import logging
 import html
@@ -29,11 +27,9 @@ import re
 
 from time import time
 
-# pylint: disable=import-error
 import isodate
 
 from lru import LRU
-# pylint: enable=import-error
 
 from ..utils import get_text, get_json
 from .command import Command
@@ -49,7 +45,7 @@ __all__ = [
     "XTwitterCommand",
     ]
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 class WebCommand(Command):
     needle = re.compile("^$"), 0
@@ -66,10 +62,11 @@ class WebCommand(Command):
     def handles(self, cmd):
         return bool(cmd)
 
-    def fixup(self, url):
+    @staticmethod
+    def fixup(url):
         return url
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         needle, group = self.needle
         now = time()
         for url in needle.finditer(msg.msg):
@@ -85,7 +82,7 @@ class WebCommand(Command):
                 if self.onurl(url, msg) is False:
                     break
             except Exception:
-                logger.exception("failed to process")
+                LOGGER.exception("failed to process")
         return False
 
     def onurl(self, url, msg):
@@ -181,7 +178,7 @@ class XIMdbCommand(WebCommand):
 
     def onurl(self, url, msg):
         resp = get_json("http://www.omdbapi.com/?i={}&plot=short&r=json".format(url))
-        logger.debug("%s", resp)
+        LOGGER.debug("%s", resp)
         title = resp.get("Title")
         if not resp.get("Response") == "True" or not title:
             return
@@ -194,7 +191,7 @@ class XIMdbCommand(WebCommand):
                                                       int(resp.get("Episode", "0")),
                                                       title)
             except Exception:
-                logger.exception("series")
+                LOGGER.exception("series")
 
         year = resp.get("Year", "0 BC")
         rating = resp.get("imdbRating", "0.0")

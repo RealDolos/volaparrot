@@ -20,8 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
+# pylint: disable=redefined-variable-type
 
 import logging
 import os
@@ -35,7 +34,7 @@ from .command import Command
 
 __all__ = ["RoomStatsCommand"]
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 def to_size(num, suffix='B'):
@@ -91,8 +90,8 @@ class RoomStatsCommand(Command):
     handlers = ".roomstats", ".stats", ".typestats", ".extstats", "💩roomstats"
     types = {"user": lambda user, file: user == file.uploader.casefold(),
              "type": lambda type, file: type == file.type.casefold(),
-             "ext": lambda ext, file:
-                 os.path.splitext(file.name)[1].casefold() in (ext, "." + ext),
+             "ext":
+                 lambda ext, file: os.path.splitext(file.name)[1].casefold() in (ext, "." + ext),
              "name": lambda name, file: name in file.name.casefold()}
 
     def _gen_filters(self, remainder):
@@ -123,7 +122,7 @@ class RoomStatsCommand(Command):
             total.add(file.size)
         return counts, types, exts, total
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         if cmd.lower() == ".stats":
             user = list(i.strip() for i in remainder.split(" ", 1))
             user, remainder = user if len(user) == 2 else (user[0], "")
@@ -134,7 +133,7 @@ class RoomStatsCommand(Command):
         filters = self._gen_filters(remainder)
         files = list(f for f in self.room.files
                      if all(fi(f) for fi in filters))
-        logger.info("Filtered %d files", len(files))
+        LOGGER.info("Filtered %d files", len(files))
 
         counts, types, exts, total = self._count(files)
 
@@ -165,9 +164,9 @@ class RoomStatsCommand(Command):
         elif cmd.lower() == ".extstats":
             counts = exts
 
-        counts = sorted(counts.items(),
-                        key=lambda i: (-i[1].rawsize, i[0])
-                        )[:10]
+        counts = sorted(
+            counts.items(),
+            key=lambda i: (-i[1].rawsize, i[0]))[:10]
         counts = list("#{})\u00a0{}: {} [{}]".
                       format(i + 1, self.nonotify(u), e.size, e.num)
                       for i, (u, e) in enumerate(counts))

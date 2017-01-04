@@ -20,9 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,too-many-lines
-# pylint: disable=wildcard-import,unused-wildcard-import
+# pylint: disable=unused-wildcard-import,wildcard-import
 
 import inspect
 import logging
@@ -56,17 +54,24 @@ class Commands(list):
             try:
                 mod = import_module(cmd)
                 for cand in mod.__dict__.values():
-                    if not inspect.isclass(cand) or not issubclass(cand, Command) \
-                            or cand is Command:
+                    if not self.valid(cand):
                         continue
                     self += cand,
             except ImportError:
                 LOGGER.exception("Failed to import custom command")
         for cand in globals().values():
-            if not inspect.isclass(cand) or not issubclass(cand, Command) \
-                    or cand is Command:
+            if not self.valid(cand):
                 continue
             self += cand,
+        LOGGER.debug("commands: %s", ", ".join(c.__name__ for c in self))
+
+    @staticmethod
+    def valid(cand):
+        if not inspect.isclass(cand) or not issubclass(cand, BaseCommand):
+            return False
+        if cand is BaseCommand or cand is Command or cand is PulseCommand or cand is FileCommand:
+            return False
+        return True
 
 
 class Handler:
@@ -81,20 +86,12 @@ class Handler:
         file_commands = list()
         pulse_commands = list()
         for cand in command_candidates:
-            if not inspect.isclass(cand) or not issubclass(cand, Command) \
-                    or cand is Command:
-                continue
             if args.noparrot and issubclass(cand, PhraseCommand):
                 continue
-            if not args.uploads and cand is UploadDownloadCommand:
-                continue
-            if not args.exif and cand is ExifCommand:
-                continue
             try:
-                if cand is PulseCommand or cand is FileCommand or cand is Command:
-                    continue
-                inst = cand(room, args.admins, args=args)
-                commands += inst,
+                inst = cand(room, args=args)
+                if issubclass(cand, Command):
+                    commands += inst,
                 if issubclass(cand, FileCommand):
                     file_commands += inst,
                 if issubclass(cand, PulseCommand):
@@ -108,12 +105,15 @@ class Handler:
         self.commands = sorted(commands, key=sort)
         self.file_commands = sorted(file_commands, key=sort)
         self.pulse_commands = sorted(pulse_commands, key=sort)
-        LOGGER.debug("Initialized commands %s",
-             ", ".join(repr(h) for h in self.commands))
-        LOGGER.debug("Initialized file commands %s",
-             ", ".join(repr(h) for h in self.file_commands))
-        LOGGER.debug("Initialized pulse commands %s",
-             ", ".join(repr(h) for h in self.pulse_commands))
+        LOGGER.debug(
+            "Initialized commands %s",
+            ", ".join(repr(h) for h in self.commands))
+        LOGGER.debug(
+            "Initialized file commands %s",
+            ", ".join(repr(h) for h in self.file_commands))
+        LOGGER.debug(
+            "Initialized pulse commands %s",
+            ", ".join(repr(h) for h in self.pulse_commands))
 
     @staticmethod
     def maybe_log(msg, lnick):
@@ -150,13 +150,22 @@ class Handler:
             return
         for command in self.commands:
             try:
-                if command.handles(cmd) and command(cmd, remainder, msg):
+                if not command.handles(cmd):
+                    continue
+                method = "handle_{}".format(cmd[1:])
+                handler = getattr(command, method, None)
+                if handler:
+                    res = handler(cmd, remainder, msg)
+                else:
+                    res = command.handle_cmd(cmd, remainder, msg)
+                if res:
                     if is_obama:
                         self.obamas[lnick] = time()
                     return
             except Exception:
-                LOGGER.exception("Failed to procss command %s with command %s",
-                      cmd, repr(command))
+                LOGGER.exception(
+                    "Failed to procss command %s with command %s",
+                    cmd, repr(command))
 
     def file(self, file):
         for command in self.file_commands:
@@ -164,8 +173,9 @@ class Handler:
                 if command.onfile(file):
                     return
             except Exception:
-                LOGGER.exception("Failed to procss command %s with command %s",
-                      file, repr(command))
+                LOGGER.exception(
+                    "Failed to procss command %s with command %s",
+                    file, repr(command))
 
     def pulse(self, current):
         LOGGER.debug("got a pulse: %d", current)
@@ -176,8 +186,9 @@ class Handler:
                 if command.onpulse(current):
                     return
             except Exception:
-                LOGGER.exception("Failed to procss command %s with command %s",
-                      time, repr(command))
+                LOGGER.exception(
+                    "Failed to procss command %s with command %s",
+                    time, repr(command))
 
     @staticmethod
     def call(item):
@@ -185,5 +196,6 @@ class Handler:
         try:
             callback(*args, **kwargs)
         except Exception:
-            LOGGER.exception("Failed to process callback with %r (%r, **%r)",
+            LOGGER.exception(
+                "Failed to process callback with %r (%r, **%r)",
                 callback, args, kwargs)

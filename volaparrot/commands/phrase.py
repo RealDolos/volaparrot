@@ -20,9 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
-
+# pylint: disable=unused-argument
 import logging
 
 from collections import namedtuple
@@ -33,10 +31,15 @@ from .command import Command
 from .db import DBCommand
 
 
-__all__ = ["PhraseCommand", "AdminDefineCommand", "DefineCommand", "PhrasesUploadCommand",
-           "XResponderCommand"]
+__all__ = [
+    "PhraseCommand",
+    "AdminDefineCommand",
+    "DefineCommand",
+    "PhrasesUploadCommand",
+    "XResponderCommand",
+    ]
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 class PhraseCommand(DBCommand):
@@ -62,7 +65,7 @@ class PhraseCommand(DBCommand):
         cur.execute("INSERT OR REPLACE INTO phrases VALUES(?, ?, ?, ?)",
                     (phrase.casefold(), text, 1 if locked else 0, owner))
         PhraseCommand.changed = time()
-        logger.debug("changed %d", self.changed)
+        LOGGER.debug("changed %d", self.changed)
 
     def unlock_phrase(self, phrase):
         cur = self.conn.cursor()
@@ -78,7 +81,7 @@ class PhraseCommand(DBCommand):
 class AdminDefineCommand(PhraseCommand, Command):
     handlers = "!unlock", "!undef"
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         if not self.isadmin(msg):
             self.post("{}: FUCK YOU!", msg.nick)
             return True
@@ -93,13 +96,13 @@ class AdminDefineCommand(PhraseCommand, Command):
 class DefineCommand(PhraseCommand, Command):
     handlers = "!define"
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_define(self, cmd, remainder, msg):
         if not self.allowed(msg):
             return
 
         phrase, remainder = list(i.strip() for i in remainder.split(" ", 1))
         if not phrase or not remainder:
-            logger.warning("Rejecting empty define")
+            LOGGER.warning("Rejecting empty define")
             return True
 
         phrase = phrase.casefold()
@@ -110,7 +113,7 @@ class DefineCommand(PhraseCommand, Command):
         existing = self.get_phrase(phrase)
         admin = self.isadmin(msg)
         if existing and existing.locked and not admin:
-            logger.warning("Rejecting logged define for %s", phrase)
+            LOGGER.warning("Rejecting logged define for %s", phrase)
             self.post("{}: {} says sodomize yerself!",
                       msg.nick, self.nonotify(self.admins[0]))
             return True
@@ -125,14 +128,14 @@ class PhrasesUploadCommand(Command, PhraseCommand):
     uploaded = 0
     upload = None
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_phrases(self, cmd, remainder, msg):
         if not self.allowed(msg):
             return True
         valid = self.upload
         if valid:
             valid = {f.id: f for f in self.room.files}.get(valid)
             valid = valid and not valid.expired
-        logger.debug("valid %s %d %d", valid, self.uploaded, PhraseCommand.changed)
+        LOGGER.debug("valid %s %d %d", valid, self.uploaded, PhraseCommand.changed)
         if not self.upload or self.uploaded < PhraseCommand.changed:
             cur = self.conn.cursor()
             phrases = "\r\n".join("{}|{}".format(*row)
@@ -152,25 +155,24 @@ class XResponderCommand(PhraseCommand, Command):
     def handles(self, cmd):
         return bool(cmd)
 
-    def __call__(self, cmd, remainder, msg):
-        nick = msg.nick
+    def handle_who(self, cmd, remainder, msg):
+        cmd = (remainder or "").strip()
+        if cmd.startswith("!"):
+            cmd = cmd[1:]
+        if not cmd:
+            return False
+        phrase = self.get_phrase(cmd)
+        if not phrase:
+            return False
+        self.post("{}: {} was created by the cuck {}",
+                  msg.nick, cmd, self.nonotify(phrase.owner or "System"))
+        return True
 
+    def handle_cmd(self, cmd, remainder, msg):
+        nick = msg.nick
         if cmd.startswith("!"):
             if not self.allowed(msg):
                 return False
-            if cmd == "!who":
-                cmd = (remainder or "").strip()
-                if cmd.startswith("!"):
-                    cmd = cmd[1:]
-                if not cmd:
-                    return False
-                phrase = self.get_phrase(cmd)
-                if not phrase:
-                    return False
-                self.post("{}: {} was created by the cuck {}",
-                          nick, cmd, self.nonotify(phrase.owner or "System"))
-                return True
-
             phrase = self.get_phrase(cmd[1:])
             if phrase:
                 self.post("{}: {}", remainder or nick, phrase.text)
@@ -196,7 +198,7 @@ class XResponderCommand(PhraseCommand, Command):
                 and "download" in lmsg):
             self.post("{}: STFU, nobody in here can do anything about it!",
                       nick)
-        if "ALKON" == nick or "ALK0N" == nick or "apha" == nick.lower():
+        if nick in ("ALKON", "ALK0N", "apha"):
             self.post("STFU newfag m(")
         lmsg = "{} {}".format(nick.lower(), lmsg)
         if ("melina" in lmsg or "meiina" in lmsg or "sunna" in lmsg or

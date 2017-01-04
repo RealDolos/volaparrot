@@ -20,9 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
-
 import asyncio
 import logging
 
@@ -36,16 +33,16 @@ from volapi.arbritrator import call_async, call_sync, ARBITRATOR
 
 __all__ = ["ARBITRATOR"]
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 @call_sync
 def pulse(self, room, interval=0.2):
-    logger.debug("pulse for %s is a go!", repr(room))
+    LOGGER.debug("pulse for %s is a go!", repr(room))
 
     @asyncio.coroutine
     def looper():
-        logger.debug("looping %s %s", repr(room), repr(interval))
+        LOGGER.debug("looping %s %s", repr(room), repr(interval))
         while True:
             nextsleep = asyncio.sleep(interval)
             try:
@@ -54,7 +51,7 @@ def pulse(self, room, interval=0.2):
                     room.conn.process_queues()
                 yield from nextsleep
             except Exception:
-                logger.exception("Failed to enqueue pulse")
+                LOGGER.exception("Failed to enqueue pulse")
 
     asyncio.async(looper(), loop=self.loop)
 
@@ -68,7 +65,7 @@ def _call_later(self, room, delay, callback, *args, **kw):
             room.conn.enqueue_data("call", [callback, args, kw])
             room.conn.process_queues()
 
-    logger.debug("call later scheduled %r %r %r", room, delay, callback)
+    LOGGER.debug("call later scheduled %r %r %r", room, delay, callback)
     self.loop.call_later(delay, insert)
 
 volapi_internal.EVENT_TYPES += "pulse", "call",

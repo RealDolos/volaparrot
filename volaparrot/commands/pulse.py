@@ -20,8 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
 
 import logging
 
@@ -30,11 +28,11 @@ from .command import PulseCommand
 
 __all__ = ["CurrentTimeCommand"]
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 class CurrentTimeCommand(PulseCommand):
     interval = 60.0
 
     def onpulse(self, current):
-        logger.info("%r: got pulsed %.2f", self.room, current)
+        LOGGER.info("%r: got pulsed %.2f", self.room, current)

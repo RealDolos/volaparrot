@@ -20,8 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
 
 import logging
 
@@ -30,12 +28,12 @@ from io import BytesIO
 import exifread
 
 from ..utils import requests, get_json
-from .command import FileCommand
+from ..commands.command import FileCommand
 
 
 __all__ = ["ExifCommand"]
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 def gps(src):
@@ -79,14 +77,14 @@ class ExifCommand(FileCommand):
                 not urll.endswith(".jpg") and not urll.endswith(".png")):
             return False
         if file.size > 10 * 1024 * 1024:
-            logger.info("Ignoring %s because too large", file)
+            LOGGER.info("Ignoring %s because too large", file)
             return False
         ttldiff = self.room.config["ttl"] - file.time_left
         if ttldiff > 10:
-            logger.info("Ignoring %s because too old", file)
+            LOGGER.info("Ignoring %s because too old", file)
             return False
 
-        logger.info("%s %s %d %d %d", file, url, file.size, file.time_left, ttldiff)
+        LOGGER.info("%s %s %d %d %d", file, url, file.size, file.time_left, ttldiff)
         lat, lon, model = gps(requests.get(url).content)
         maps = "https://www.google.com/maps?f=q&q=loc:{:.7},{:.7}&t=k&spn=0.5,0.5".format(lat, lon)
         loc = get_json(

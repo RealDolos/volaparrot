@@ -1,3 +1,5 @@
+# pylint: disable=wildcard-import
+
 from .command import *
 
 from .admin import *
@@ -6,9 +8,6 @@ from .info import *
 from .phrase import *
 from .stats import *
 from .tard import *
-from .upload import *
 from .web import *
-from .exif import *
 from .pulse import *
 from .request import *
-from .quotes import *

@@ -20,30 +20,22 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
-
-import logging
-
-from .command import Command
+from .command import BaseCommand, Command
 
 
 __all__ = ["AdminActivateCommand"]
 
-logger = logging.getLogger(__name__)
-
-
 class AdminActivateCommand(Command):
     handlers = ".active", ".ded"
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         if not self.isadmin(msg):
             self.post("{}: I don't care about your commands", msg.nick)
             return True
         if cmd == ".ded":
             self.post("Segmentation fault... core dumped")
-            Command.set_global_active(False)
+            BaseCommand.set_global_active(False)
         else:
-            Command.set_global_active(True)
+            BaseCommand.set_global_active(True)
             self.post("Let the spam commence")
         return True

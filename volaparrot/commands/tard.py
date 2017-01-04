@@ -20,14 +20,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
-
 import logging
 import random
 import re
 
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, TimeoutExpired
 from sqlite3 import Connection
 
 from lru import LRU
@@ -44,7 +41,7 @@ __all__ = [
     "RedardCommand",
     ]
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 class EightballCommand(Command):
     handlers = "!8ball", "!eightball", "!blueballs"
@@ -72,7 +69,7 @@ class EightballCommand(Command):
         "Very doubtful"
         ]
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         if not self.allowed(msg):
             return True
         if not remainder.strip():
@@ -88,11 +85,11 @@ class EightballCommand(Command):
 class RevolverCommand(Command):
     handlers = "!roulette", "!volarette"
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         if not self.allowed(msg):
             return True
         if not self.active:
-            logger.info("Not rolling")
+            LOGGER.info("Not rolling")
             return
         if msg.nick in ("Counselor", "Brisis"):
             shoot = 6
@@ -104,16 +101,24 @@ class RevolverCommand(Command):
         if shoot == 6:
             self.call_later(8, self.post, "BANG, {} is dead", msg.nick)
         elif shoot == 5:
-            self.call_later(8, self.post, "{}, you missed but still managed to hit Counselor.\nCongrats, you killed a pede!", msg.nick)
+            self.call_later(
+                8,
+                self.post,
+                "{}, you missed but still managed to hit Counselor.\nCongrats, you killed a pede!",
+                msg.nick)
         else:
-            self.call_later(8, self.post, "CLICK, {} is still foreveralone", msg.nick)
+            self.call_later(
+                8,
+                self.post,
+                "CLICK, {} is still foreveralone",
+                msg.nick)
         return True
 
 
 class DiceCommand(Command):
     handlers = "!dice", "!roll"
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         if not self.allowed(msg):
             return True
         many = 1
@@ -135,7 +140,7 @@ class DiceCommand(Command):
 class XDanielCommand(Command):
     handlers = "!siberia", "!cyberia"
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         nick = remainder.strip() or msg.nick
         self.post("{}: Daniel, also Maksim aka Maxim, also Nigredo, "
                   "free APKs for everybody, {}'s friend",
@@ -148,7 +153,7 @@ class ChenCommand(Command):
         if re.match(r"\!che+n$", cmd, re.I):
             return True
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         if not self.allowed(msg):
             return False
         user = remainder.strip() or msg.nick
@@ -169,15 +174,15 @@ class ProfanityCommand(Command):
         with Popen("alex -t".split(" "), stdout=PIPE, stdin=PIPE) as process:
             try:
                 string = string.encode("utf-8")
-                rv = str(process.communicate(string, timeout=3)[0], "utf-8").split("\n")
+                result = str(process.communicate(string, timeout=3)[0], "utf-8").split("\n")
             except TimeoutExpired:
                 process.kill()
                 raise
-        rv = (ProfanityCommand.extract.search(l.strip()) for l in rv)
-        rv = set(m.group(1).strip() for m in rv if m)
-        return rv
+        result = (ProfanityCommand.extract.search(l.strip()) for l in result)
+        result = set(m.group(1).strip() for m in result if m)
+        return result
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         if cmd not in self.handlers:
             self.lru[msg.nick.casefold()] = (msg.nick, msg.msg)
             return False
@@ -207,22 +212,23 @@ class ProfanityCommand(Command):
             return True
 
         except Exception:
-            logger.exception("failed to analyze")
+            LOGGER.exception("failed to analyze")
             return False
+
 
 class RedardCommand(Command):
     redard = re.compile(r"\bredard\b", re.I)
-    db = Connection("merc.db", isolation_level=None)
+    database = Connection("merc.db", isolation_level=None)
 
     def handles(self, cmd):
         return bool(cmd)
 
-    def __call__(self, cmd, remainder, msg):
+    def handle_cmd(self, cmd, remainder, msg):
         if not self.allowed(msg):
             return False
         if not self.redard.search(msg.msg):
             return False
-        cur = self.db.cursor()
+        cur = self.database.cursor()
         cur.execute("SELECT msg FROM red ORDER BY RANDOM() LIMIT 1")
         quote = cur.fetchone()
         if not quote:
@@ -235,7 +241,7 @@ try:
         raise Exception("Not found")
     __all__ += "ProfanityCommand",
 except Exception:
-    logger.warning("Cannot use alex, ProfanityCommand is not available")
+    LOGGER.warning("Cannot use alex, ProfanityCommand is not available")
 
 
 if __name__ == "__main__":

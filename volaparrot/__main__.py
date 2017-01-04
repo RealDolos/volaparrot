@@ -21,11 +21,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,too-many-lines,wildcard-import
 # pylint: disable=redefined-variable-type
 
-# Windows is best OS
 try:
     import win_unicode_console
     win_unicode_console.enable(use_unicode_argv=True)
@@ -41,11 +38,11 @@ from contextlib import ExitStack, suppress
 from path import path
 from volapi import Room, listen_many
 
-from .constants import *
+from .constants import ADMINFAG, PARROTFAG
 from ._version import __fulltitle__, __version__
 from .arb import ARBITRATOR
 from .handler import Handler, Commands
-from .commands import Command
+from .commands import BaseCommand
 
 
 # pylint: disable=invalid-name
@@ -126,10 +123,6 @@ def parse_args():
                         help="Greenfag yerself")
     parser.add_argument("--no-parrot", dest="noparrot", action="store_true",
                         help="Does not actually parrot")
-    parser.add_argument("--uploads", dest="uploads", action="store_true",
-                        help="Enable upload commands")
-    parser.add_argument("--exif", dest="exif", action="store_true",
-                        help="Enable exif bot")
     parser.add_argument("--debug", dest="debug", action="store_true",
                         help="Ignore unless you are dongmaster")
     parser.add_argument("--softlogin", dest="softlogin", action="store_true",
@@ -164,8 +157,6 @@ def parse_args():
                         help="Rooms to fuck up")
     defaults = {
         "noparrot": False,
-        "uploads": False,
-        "exif": False,
         "debug": False,
         "softlogin": False,
         "shitposting": False,
@@ -241,12 +232,12 @@ def override_socket(bind):
             super().__init__(*args, **kw)
 
         def connect(self, address):
-            with supress(Exception):
+            with suppress(Exception):
                 self.bind((bind, 0))
             return super().connect(address)
 
         def connect_ex(self, address):
-            with supress(Exception):
+            with suppress(Exception):
                 self.bind((bind, 0))
             return super().connect_ex(address)
 
@@ -277,9 +268,9 @@ def main():
     if args.bind:
         override_socket(args.bind)
 
-    Command.set_global_active(not args.ded)
-    Command.shitposting = args.shitposting
-    Command.greens = args.greenmasterrace
+    BaseCommand.set_global_active(not args.ded)
+    BaseCommand.shitposting = args.shitposting
+    BaseCommand.greens = args.greenmasterrace
 
     try:
         commands = Commands(args.commands)

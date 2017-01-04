@@ -20,8 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
+# pylint: disable=invalid-name
 
 from functools import lru_cache
 from time import time
@@ -31,9 +30,12 @@ from requests import Session
 
 __all__ = ["requests", "get_text", "get_json"]
 
+UA = (
+    "Mozilla/5.0 (Linux; cli) pyrequests/0.1 "
+    "(python, like Gecko, like KHTML, like wget, like CURL) volaparrot/1.0")
 requests = Session()
 requests.headers.update({
-    "User-Agent": "Mozilla/5.0 (Linux; cli) pyrequests/0.1 (python, like Gecko, like KHTML, like wget, like CURL) volaparrot/1.0",
+    "User-Agent": UA,
     })
 
 @lru_cache(128)

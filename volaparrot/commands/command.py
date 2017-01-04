@@ -20,37 +20,32 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-# pylint: disable=missing-docstring,broad-except,too-few-public-methods
-# pylint: disable=bad-continuation,star-args,too-many-lines
-
 import logging
-
-from random import shuffle
-from time import time
+import warnings
 
 from volapi.arbritrator import ARBITRATOR
 
 
-__all__ = ["Command", "FileCommand", "PulseCommand"]
+__all__ = ["BaseCommand", "Command", "FileCommand", "PulseCommand"]
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
-class Command:
+class BaseCommand:
     _active = True
     mute = False
     shitposting = False
-    greens = False
+    handlers = ()
 
-    def __init__(self, room, admins, *args, **kw):
+    def __init__(self, room, *args, **kw):
         self.room = room
         self.mute = room.name in kw.get("args").muterooms
 
-        self.admins = admins
         handlers = getattr(self, "handlers", list())
         if isinstance(handlers, str):
             handlers = handlers,
         self._handlers = list(i.casefold() for i in handlers)
+        args, kw = kw, args
 
     def handles(self, cmd):
         return cmd in self._handlers
@@ -71,7 +66,7 @@ class Command:
         msg = msg.format(*args, **kw)[:300]
 
         if not self.active:
-            logger.info("Swallowed %s", msg)
+            LOGGER.info("Swallowed %s", msg)
             return
         self.room.post_chat(msg)
 
@@ -79,23 +74,38 @@ class Command:
     def nonotify(nick):
         return "{}\u2060{}".format(nick[0], nick[1:])
 
+    def call_later(self, delay, callback, *args, **kw):
+        # pylint: disable=no-member
+        ARBITRATOR.call_later(self.room, delay, callback, *args, **kw)
+
+
+class Command(BaseCommand):
+    greens = False
+
+    def __init__(self, *args, **kw):
+        self.admins = kw.get("args").admins
+        super().__init__(*args, **kw)
+
     def isadmin(self, msg):
         return msg.logged_in and msg.nick in self.admins
 
     def allowed(self, msg):
         return not self.greens or msg.logged_in
 
-    def call_later(self, delay, callback, *args, **kw):
-        # pylint: disable=no-member
-        ARBITRATOR.call_later(self.room, delay, callback, *args, **kw)
+    def handle_cmd(self, cmd, remainder, msg):
+        old = getattr(self, "__call__", None)
+        if old:
+            warnings.warn("implement handle_cmd", DeprecationWarning)
+            return old(cmd, remainder, msg)
+        raise NotImplementedError()
 
 
-class FileCommand(Command):
-    def __call__(self, cmd, remainder, msg):
-        return False
+class FileCommand(BaseCommand):
+    def onfile(self, file):
+        raise NotImplementedError()
 
 
-class PulseCommand(Command):
+class PulseCommand(BaseCommand):
     interval = 0
 
     def __init__(self, *args, **kw):
@@ -104,11 +114,11 @@ class PulseCommand(Command):
         if self.interval <= 0:
             raise RuntimeError("No valid interval")
 
-    def __call__(self, cmd, remainder, msg):
-        return False
-
     def check_interval(self, current, interval=1.0):
         result = current >= self.last_interval + interval
         if result:
             self.last_interval = current
         return result
+
+    def onpulse(self, current):
+        raise NotImplementedError()
