@@ -42,7 +42,7 @@ from .constants import ADMINFAG, PARROTFAG
 from ._version import __fulltitle__, __version__
 from .arb import ARBITRATOR
 from .handler import Handler, Commands
-from .commands import BaseCommand
+from .commands import BaseCommand, Command
 
 
 # pylint: disable=invalid-name
@@ -270,7 +270,7 @@ def main():
 
     BaseCommand.set_global_active(not args.ded)
     BaseCommand.shitposting = args.shitposting
-    BaseCommand.greens = args.greenmasterrace
+    Command.greens = args.greenmasterrace
 
     try:
         commands = Commands(args.commands)
