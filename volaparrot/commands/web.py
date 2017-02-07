@@ -29,7 +29,7 @@ from time import time
 
 import isodate
 
-from lru import LRU
+from cachetools import LRUCache
 
 from ..utils import get_text, get_json
 from .command import Command
@@ -49,7 +49,7 @@ LOGGER = logging.getLogger(__name__)
 
 class WebCommand(Command):
     needle = re.compile("^$"), 0
-    cooldown = LRU(20)
+    cooldown = LRUCache(maxsize=20)
     timeout = 3 * 60
 
     def __init__(self, *args, **kw):

@@ -28,7 +28,7 @@ from time import time
 from datetime import datetime, timedelta
 
 from humanize import naturaldelta
-from lru import LRU
+from cachetools import LRUCache
 
 from .._version import __version__, __fulltitle__
 from ..utils import get_text, get_json
@@ -165,7 +165,7 @@ class AboutCommand(Command):
 class SeenCommand(DBCommand, Command, PulseCommand):
     interval = 5 * 60
 
-    seen = LRU(50)
+    seen = LRUCache(maxsize=50)
     start = time()
 
     usermap = {

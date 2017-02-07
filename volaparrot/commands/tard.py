@@ -27,7 +27,7 @@ import re
 from subprocess import Popen, PIPE, TimeoutExpired
 from sqlite3 import Connection
 
-from lru import LRU
+from cachetools import LRUCache
 
 from .command import Command
 
@@ -164,7 +164,7 @@ class ChenCommand(Command):
 class ProfanityCommand(Command):
     extract = re.compile(r"1:.*?\s+warning\s+(.*?)\s\S+$")
     handlers = "!analyze", "!sjw", "!profanity"
-    lru = LRU(20)
+    lru = LRUCache(maxsize=20)
 
     def handles(self, cmd):
         return True

@@ -25,7 +25,7 @@ from datetime import datetime
 from io import BytesIO
 from time import time
 
-from lru import LRU
+from cachetools import LRUCache
 
 from .command import Command
 
@@ -35,7 +35,7 @@ __all__ = ["RequestCommand"]
 
 class RequestCommand(Command):
     handlers = "!request"
-    cooldown = LRU(20)
+    cooldown = LRUCache(maxsize=20)
     timeout = 1*60*60
 
     def handle_request(self, cmd, remainder, msg):
