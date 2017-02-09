@@ -3,7 +3,7 @@ python-dateutil>=2.4.2
 requests>=2.7.0
 volapi>=4.0.0
 ExifRead
-path.py
+path.py>=10.0
 cachetools
 humanize
 win-unicode-console

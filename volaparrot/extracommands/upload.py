@@ -28,7 +28,7 @@ from io import BytesIO
 from time import time
 from uuid import uuid4
 
-from path import path
+from path import Path
 
 from ..utils import requests
 from ..commands.command import Command
@@ -69,7 +69,7 @@ class UploadDownloadCommand(DBCommand, Command):
             return None
         newid = None
         while not newid or newid.exists():
-            newid = path("downloads") / "{!s}.cuckload".format(uuid4())
+            newid = Path("downloads") / "{!s}.cuckload".format(uuid4())
         newid.parent.mkdir_p()
         with open(newid, "wb") as outp:
             outp.write(content.read() if hasattr(content, "read") else content.encode("utf-8"))
@@ -101,7 +101,7 @@ class UploadDownloadCommand(DBCommand, Command):
         cur = self.conn.cursor()
         cur.execute("DELETE FROM files WHERE phrase = ?",
                     (file.phrase,))
-        file = path(file.id)
+        file = Path(file.id)
         if file and file.exists():
             try:
                 file.unlink()
@@ -170,7 +170,7 @@ class UploadDownloadCommand(DBCommand, Command):
             try:
                 if not existing.id:
                     raise Exception("what")
-                path(existing.id).unlink()
+                Path(existing.id).unlink()
             except Exception:
                 pass
         self.post("{}: KUK", msg.nick)

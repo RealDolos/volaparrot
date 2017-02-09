@@ -35,7 +35,7 @@ import time
 
 from contextlib import ExitStack, suppress
 
-from path import path
+from path import Path
 from volapi import Room, listen_many
 
 from .constants import ADMINFAG, PARROTFAG
@@ -55,9 +55,9 @@ class Config:
 
     def __init__(self, name):
         with suppress(Exception):
-            self.home = self.init_one(path("~/.{}.conf".format(name)).expand(), name)
+            self.home = self.init_one(Path("~/.{}.conf".format(name)).expand(), name)
         with suppress(Exception):
-            self.curr = self.init_one(path("./.{}.conf".format(name)).expand(), name)
+            self.curr = self.init_one(Path("./.{}.conf".format(name)).expand(), name)
 
     @staticmethod
     def init_one(loc, sec):
