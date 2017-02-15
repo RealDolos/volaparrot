@@ -105,7 +105,7 @@ class CheckModCommand(Command):
         elif user.lower() in ("kalyx", "mercwmouth", "davinci", "liquid"):
             self.post("Yes, unfortunately the fag {} is still a mod", user)
         elif user.lower() == "ptc":
-            self.post("Sweet jewprince is well and alive, unlike Yahoo!")
+            self.post("Sweet jewprince is well and alive, unlike Y!erizon")
         else:
             self.post("Yes, {} is still a mod", user)
 
