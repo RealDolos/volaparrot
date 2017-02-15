@@ -68,6 +68,9 @@ def _call_later(self, room, delay, callback, *args, **kw):
     LOGGER.debug("call later scheduled %r %r %r", room, delay, callback)
     self.loop.call_later(delay, insert)
 
-volapi_internal.EVENT_TYPES += "pulse", "call",
+try:
+    volapi_internal.EVENT_TYPES += "pulse", "call",
+except AttributeError:
+    pass
 ARBITRATOR.start_pulse = MethodType(pulse, ARBITRATOR)
 ARBITRATOR.call_later = MethodType(_call_later, ARBITRATOR)
