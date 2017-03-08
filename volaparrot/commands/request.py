@@ -41,6 +41,8 @@ class RequestCommand(Command):
     def handle_request(self, cmd, remainder, msg):
         if not self.active:
             return False
+        if not self.allowed(msg):
+            return False
         if self.cooldown.get(msg.nick.lower(), 0) + self.timeout > time():
             self.post("{}, pls wait", msg.nick)
             return True

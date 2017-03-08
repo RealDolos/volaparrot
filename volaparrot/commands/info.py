@@ -120,7 +120,7 @@ class CheckModCommand(Command):
         elif user.lower() == "liquid":
             self.post("pls, Liquid will never be a mod")
         else:
-            self.post("{} is not trusted, at all!".format(user))
+            self.post("{} is not trusted, at all!", user)
 
     def handle_check(self, cmd, remainder, msg):
         remainder = remainder.strip()

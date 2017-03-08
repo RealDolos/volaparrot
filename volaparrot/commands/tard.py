@@ -133,7 +133,7 @@ class DiceCommand(Command):
             return False
         if many < 1 or many > 10:
             return False
-        self.post("Rolled {}".format(sum(random.randint(1, sides) for _ in range(many))))
+        self.post("Rolled {}", sum(random.randint(1, sides) for _ in range(many)))
         return True
 
 
