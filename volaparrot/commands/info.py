@@ -127,11 +127,11 @@ class CheckModCommand(Command):
         user = remainder if remainder and " " not in remainder else "MercWMouth"
         LOGGER.debug("Getting user %s", user)
         try:
-            text, exp = get_text("https://volafile.io/user/{}".format(user))
+            text, exp = get_text("https://volafile.org/user/{}".format(user))
             if time() - exp > 120:
                 get_text.cache_clear()
                 get_json.cache_clear()
-                text, exp = get_text("https://volafile.io/user/{}".format(user))
+                text, exp = get_text("https://volafile.org/user/{}".format(user))
             if "Error 404" in text:
                 LOGGER.info("Not a user %s", user)
                 return False

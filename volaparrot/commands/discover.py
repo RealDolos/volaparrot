@@ -144,12 +144,12 @@ class DiscoverCommand(DBCommand, Command, PulseCommand):
             rooms = sorted(cur.execute("SELECT room, title, users, files FROM rooms "
                                        "WHERE alive = 1 AND room <> ? "
                                        "AND title LIKE ? COLLATE NOCASE",
-                                       (self.room.name, "%{}%".format(limit))),
+                                       (self.room.room_id, "%{}%".format(limit))),
                            key=keyfn, reverse=True)
         else:
             rooms = sorted(cur.execute("SELECT room, title, users, files FROM rooms "
                                        "WHERE alive = 1 AND room <> ?",
-                                       (self.room.name,)),
+                                       (self.room.room_id,)),
                            key=keyfn, reverse=True)
         rooms = list(rooms)
         return rooms
@@ -196,14 +196,17 @@ class DiscoverCommand(DBCommand, Command, PulseCommand):
 
         try:
             LOGGER.info("Stating %s", room)
-            title, users, files, disabled = roomstat(room)
+            room_id, title, users, files, disabled = roomstat(room)
             if disabled:
                 return False
         except Exception:
             LOGGER.exception("Failed to retrieve room info for %s", room)
             return False
 
-        LOGGER.info("Added Room %s with (%d/%d)", room, users, files)
+        LOGGER.info("Added Room %s (%s) with (%d/%d)", room, room_id, users, files)
+        if room != room_id:
+            self.conn.cursor().execute("DELETE FROM rooms WHERE room = ?", (room,))
+            room = room_id
         self.conn.cursor().execute(
             "INSERT OR IGNORE INTO rooms "
             "(room, title, users, files, firstadded) "
@@ -247,11 +250,19 @@ class DiscoverCommand(DBCommand, Command, PulseCommand):
             for (room,) in rooms:
                 cur = self.conn.cursor()
                 try:
-                    title, users, files, disabled = roomstat(room)
+                    room_id, title, users, files, disabled = roomstat(room)
                     if disabled:
                         LOGGER.warning("Killing disabled room")
                         cur.execute("DELETE FROM rooms WHERE room = ?", (room,))
                     else:
+                        if room != room_id:
+                            cur.execute("DELETE FROM rooms WHERE room = ?", (room,))
+                            room = room_id
+                            cur.execute(
+                                "INSERT OR IGNORE INTO rooms "
+                                "(room, title, users, files, firstadded) "
+                                "VALUES(?, ?, ?, ?, ?)",
+                                (room, title, users, files, int(time() * 1000)))
                         LOGGER.info("Updated %s %s", room, title)
                         cur.execute("UPDATE rooms set title = ?, users = ?, files = ?, "
                                     "alive = 1 "

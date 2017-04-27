@@ -32,7 +32,7 @@ def _roomstat(room):
     from volapi import Room
     with Room(room, "letest") as remote:
         remote.listen(onusercount=lambda x: False)
-        return (remote.title, max(remote.user_count, 0),
+        return (remote.room_id, remote.title, max(remote.user_count, 0),
                 len(remote.files), remote.config.get("disabled"))
 
 def roomstat(room):
