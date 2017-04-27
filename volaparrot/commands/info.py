@@ -88,6 +88,8 @@ class CheckModCommand(Command):
                 "Yes, unfortunately the literally brown pajeet hitler "
                 "and pretend lawyer {} is still a marginally trusted user",
                 user)
+        elif user.lower() in ("thersanderia",):
+            self.post("Yes, {} is a Trusted Jizzcook with not one but two Michelin stars!", user)
         elif user.lower() in ("kalyx", "mercwmouth", "davinci", "liquid"):
             self.post(
                 "Yes, unfortunately the fag "
