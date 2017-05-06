@@ -33,6 +33,10 @@ LOGGER = logging.getLogger(__name__)
 
 class CurrentTimeCommand(PulseCommand):
     interval = 60.0
+    last = 0
 
     def onpulse(self, current):
+        if abs(CurrentTimeCommand.last - current) < 10:
+            return
+        CurrentTimeCommand.last = current
         LOGGER.info("%r: got pulsed %.2f", self.room, current)

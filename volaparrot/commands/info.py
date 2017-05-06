@@ -234,7 +234,7 @@ class SeenCommand(DBCommand, Command, PulseCommand):
 
     def onpulse(self, pulse):
         try:
-            LOGGER.info("Dumping seen to db")
+            LOGGER.debug("Dumping seen to db")
             cur = self.conn.cursor()
             cur.executemany(
                 "INSERT OR REPLACE INTO seen VALUES(?, ?)",

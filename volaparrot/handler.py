@@ -129,7 +129,7 @@ class Handler:
     def chat(self, msg):
         if msg.nick == self.room.user.name or msg.nick in ("MOTD", "Reminder"):
             return
-        LOGGER.info("%s %s", self.room.name, msg)
+        LOGGER.info("%-23s: %s", self.room.name, msg)
 
         lnick = msg.nick.casefold()
         with suppress(IOError):
