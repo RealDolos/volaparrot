@@ -263,7 +263,7 @@ class DiscoverCommand(DBCommand, Command, PulseCommand):
                                 "(room, title, users, files, firstadded) "
                                 "VALUES(?, ?, ?, ?, ?)",
                                 (room, title, users, files, int(time() * 1000)))
-                        LOGGER.info("Updated %s %s", room, title)
+                        LOGGER.debug("Updated %s %s", room, title)
                         cur.execute("UPDATE rooms set title = ?, users = ?, files = ?, "
                                     "alive = 1 "
                                     "WHERE room = ?",
