@@ -30,6 +30,8 @@ import volapi.volapi as volapi_internal
 
 from volapi.arbritrator import call_async, call_sync, ARBITRATOR
 
+from .processor import Processor
+
 
 __all__ = ["ARBITRATOR"]
 
@@ -68,9 +70,20 @@ def _call_later(self, room, delay, callback, *args, **kw):
     LOGGER.debug("call later scheduled %r %r %r", room, delay, callback)
     self.loop.call_later(delay, insert)
 
+def _run_process(self, room, callback, *args):
+    if not hasattr(self, "processor"):
+        self.processor = Processor()
+
+    def result(res):
+        nonlocal room, callback, args
+        ARBITRATOR.call_later(room, 0, callback, *res)
+
+    self.processor(result, args)
+
 try:
     volapi_internal.EVENT_TYPES += "pulse", "call",
 except AttributeError:
     pass
 ARBITRATOR.start_pulse = MethodType(pulse, ARBITRATOR)
 ARBITRATOR.call_later = MethodType(_call_later, ARBITRATOR)
+ARBITRATOR.run_process = MethodType(_run_process, ARBITRATOR)

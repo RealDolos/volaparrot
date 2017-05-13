@@ -78,6 +78,10 @@ class BaseCommand:
         # pylint: disable=no-member
         ARBITRATOR.call_later(self.room, delay, callback, *args, **kw)
 
+    def run_process(self, callback, *args):
+        # pylint: disable=no-member
+        ARBITRATOR.run_process(self.room, callback, *args)
+
 
 class Command(BaseCommand):
     greens = False

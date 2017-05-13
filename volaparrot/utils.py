@@ -22,7 +22,7 @@ THE SOFTWARE.
 """
 # pylint: disable=invalid-name
 
-from functools import lru_cache
+from functools import lru_cache, partial
 from time import time
 
 from requests import Session
@@ -46,3 +46,6 @@ def get_text(url):
 @lru_cache(512)
 def get_json(url):
     return requests.get(url).json()
+
+def u8str(s):
+    return str(s, encoding="utf-8", errors="ignore")
