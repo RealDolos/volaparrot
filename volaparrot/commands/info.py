@@ -38,21 +38,21 @@ from .db import DBCommand
 
 __all__ = [
     "NiggersCommand",
-    "ObamasCommand",
     "CheckModCommand",
     "AboutCommand",
     "SeenCommand",
-    "AsleepCommand"
+    "AsleepCommand",
     ]
 
 LOGGER = logging.getLogger(__name__)
 
 
 class NiggersCommand(Command):
-    handlers = "!niggers"
+    handlers = "!niggers", "!obamas"
 
     def __init__(self, *args, **kw):
         self.blacks = kw.get("args").blacks
+        self.obamas = kw.get("args").obamas
         super().__init__(*args, **kw)
 
     def handle_niggers(self, cmd, remainder, msg):
@@ -62,13 +62,6 @@ class NiggersCommand(Command):
                   msg.nick, ", ".join(self.blacks))
         return True
 
-
-class ObamasCommand(Command):
-    handlers = "!obamas"
-
-    def __init__(self, *args, **kw):
-        self.obamas = kw.get("args").obamas
-        super().__init__(*args, **kw)
 
     def handle_obamas(self, cmd, remainder, msg):
         if not self.allowed(msg):
