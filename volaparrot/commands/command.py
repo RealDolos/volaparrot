@@ -70,6 +70,12 @@ class BaseCommand:
             return
         self.room.post_chat(msg)
 
+    def post_fid(self, fid, msg, *args, **kw):
+        if fid not in self.room.filedict:
+            self.call_later(1, self.post_fid, fid, msg, *args, **kw)
+            return
+        self.post(msg, *args, **kw)
+
     @staticmethod
     def nonotify(nick):
         return "{}\u2060{}".format(nick[0], nick[1:])
